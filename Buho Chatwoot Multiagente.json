@@ -1,0 +1,2333 @@
+{
+  "name": "Buho Chatwoot Multiagente",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Buho Chatwoot Multiagente\n\n**No edita** el flujo Telegram original.\n\n### Credenciales (ya asignadas: no reimportar)\n1. OpenAI en los 3 modelos (`gpt-4o-mini`).\n2. Header Auth SIMA → `Authorization`.\n3. Header Auth SmartOLT → `X-Token`. Nunca pegar el token en el canvas.\n4. Header Auth Chatwoot → `api_access_token`.\n   - Enviar mensajes: token del Agent Bot suele bastar.\n   - Transfer / Handoff / Save Identity: si dan 401/403, usa Access Token de un **usuario admin** (Chatwoot → Perfil → Access Token) en la misma credencial API Chatwoot. No hace falta otro bot.\n5. Postgres (3 memorias) y Redis (nodos Redis).\n\n### Chatwoot (hacer una vez en la cuenta)\n1. Ajustes → Atributos personalizados → **Conversación** → crear `active_agent` (texto). Sin esto Transfer puede 422.\n2. Opcional en **Contacto**: `cedula`, `referencia`, `sn`, `onu_id`, `zona` (Save Identity).\n3. Crear equipos Soporte / Contabilidad / Ventas. Copiar el ID numérico al nodo **Config** (`team_id_*`). Hoy están en 0: el handoff abre la conversación pero **no asigna equipo**.\n4. Agent Bot Buho n8n → URL producción `/webhook/buho-chatwoot-bot`. Inbox Telegram → ese bot.\n5. Chats del bot: filtro **Pending / Bot**. Humanos tras Handoff: filtro **Open**.\n\n### Transfer vs Handoff\n- **Transfer*** = sticky IA (`active_agent`). El siguiente mensaje lo atiende otro agente n8n. Sigue Pending.\n- **Handoff*** = `status: open` + `team_id`. Asesor humano. n8n deja de responder.\n\nEntrada siempre **Soporte**. No ejecutes las tools HTTP a mano (error supplyData).\n\n### SIMA (precio por zona)\nNo hay API de tarifas/cobertura. SIMA solo lista clientes/contratos.\nLas tools **SIMA Cliente** llaman un subflujo con HTTP Request GET `/api/v1/clientes` (sí tiene `execute`; evita el error supplyData de n8n 2.36).\nOpcional: importa `SIMA Buscar Cliente.json` para probar el GET a mano (credencial Token Sima). En el agente las tools ya llevan el JSON embebido.\nNo ejecutes las tools del agente a mano.\n\n### Menú tipo Wati\nAntes de los agentes hay un menú fijo: bienvenida (Soporte y trámites / Ventas / Pagos y facturación), submenú de Soporte (falla, WiFi, PQR) y la pregunta del portal de pagos.\nEl cliente puede tocar el botón o escribir el número. Escribir **menú** o **inicio** vuelve a la bienvenida.\n`Config.menu_botones`: true envía botones `input_select`; si Telegram los muestra mal, ponlo en false (queda el texto numerado).\nAtributos opcionales del contacto: `lead_nombre`, `lead_direccion`, `lead_tipo_plan` (los escribe Guardar Lead Ventas).\nLos IDs de equipo siguen en Config (`team_id_*`). En 0 el handoff abre el chat pero no asigna equipo.\n\n### Inicio\nBienvenida con tres opciones: Soporte, Consultar cuenta y No soy cliente.\nSoporte y Consultar cuenta piden tipo de documento (cédula de ciudadanía, extranjería, pasaporte o NIT) y el número, confirman los datos y consultan SIMA (`tipo_documento` + `numero_documento` + `solo_activas=1`). Si hay varias referencias activas, el cliente elige una. Si no existe, puede ir a ventas o volver al menú.\nNo soy cliente entra a Ventas sin documento.",
+        "height": 1480,
+        "width": 480,
+        "color": 5
+      },
+      "id": "ec815769-c677-474c-993d-25f748062d47",
+      "name": "Notas de importación",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -3008,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "buho-chatwoot-bot",
+        "options": {},
+        "responseMode": "onReceived"
+      },
+      "id": "847007d2-6023-45bb-87c1-0c8a543fe206",
+      "name": "Webhook Chatwoot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2560,
+        1056
+      ],
+      "webhookId": "24e8600d-4e62-4232-90c7-094c8daeaada"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9e59b449-a134-4312-9566-cbf1810ba92b",
+              "name": "chatwoot_base_url",
+              "value": "https://chatwoot.buho-net.com",
+              "type": "string"
+            },
+            {
+              "id": "eadc7d06-5e2b-4f4d-9c13-7668851ac111",
+              "name": "chatwoot_account_id",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "1d1ddf6f-98e0-4be6-8dd5-e4565b4d42a3",
+              "name": "team_id_soporte",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "26f3bd72-49c4-4990-9758-119eaacac4ec",
+              "name": "team_id_contabilidad",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "ebbc930e-a9d1-4bed-a985-3dbc288cda18",
+              "name": "team_id_ventas",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "a1f66bb2-65d3-464e-92d6-b7b70a3e7ee4",
+              "name": "menu_botones",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "d6c294d0-d0a0-4a8d-b2a6-6fe576cec7cb",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -2336,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $input.first().json;\nconst body = cfg.body && typeof cfg.body === 'object' && !cfg.event && !cfg.content ? cfg.body : cfg;\n\nconst event = String(body.event || '');\nconst messageType = body.message_type;\nconst incoming = messageType === 'incoming' || messageType === 0 || messageType === '0' || messageType === undefined;\nconst content = String(body.content || body.processed_message_content || '').trim();\nconst conv = body.conversation || {};\nconst status = String(conv.status || '').toLowerCase();\nconst sender = body.sender || {};\nconst accountId = (body.account && body.account.id) || cfg.chatwoot_account_id;\nconst conversationId = conv.id || body.conversation_id;\nconst contactId = sender.id || conv.contact_id || (body.contact && body.contact.id);\nconst inboxId = conv.inbox_id || body.inbox_id;\nconst messageId = String(body.id || '');\n\nconst contactAttrs = (sender.custom_attributes && typeof sender.custom_attributes === 'object') ? sender.custom_attributes : {};\nconst convAttrs = (conv.custom_attributes && typeof conv.custom_attributes === 'object') ? conv.custom_attributes : {};\n\nlet skip = false;\nlet skip_reason = '';\nif (event && event !== 'message_created') { skip = true; skip_reason = 'event'; }\nelse if (!incoming) { skip = true; skip_reason = 'outgoing'; }\nelse if (status === 'open' || status === 'resolved' || status === 'snoozed') { skip = true; skip_reason = 'human_or_closed'; }\nelse if (!content) { skip = true; skip_reason = 'empty'; }\nelse if (!conversationId || !accountId) { skip = true; skip_reason = 'missing_ids'; }\n\nreturn [{\n  json: {\n    skip,\n    skip_reason,\n    text: content,\n    event,\n    status,\n    message_id: messageId,\n    account_id: accountId,\n    conversation_id: conversationId,\n    contact_id: contactId,\n    inbox_id: inboxId,\n    session_key: 'chatwoot:' + String(contactId || conversationId || 'anon'),\n    redis_seen_key: 'buho:seen:' + messageId,\n    redis_session_key: 'buho:session:' + String(contactId || conversationId || 'anon'),\n    redis_outage_key: 'buho:outage:global',\n    chatwoot_base_url: String(cfg.chatwoot_base_url || '').replace(/\\/$/, ''),\n    team_id_contabilidad: cfg.team_id_contabilidad,\n    team_id_soporte: cfg.team_id_soporte,\n    team_id_ventas: cfg.team_id_ventas,\n    attrs_contact: contactAttrs,\n    attrs_conv: convAttrs\n  }\n}];\n"
+      },
+      "id": "52281af2-689d-489b-a646-55a013f567af",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2112,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a4d935d6-3599-4ede-8ddc-41bd4136bd1d",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d9251b8c-f3a6-4045-bcd5-e8f3aae7a944",
+      "name": "IF Continuar",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1888,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "={{ $json.redis_seen_key }}",
+        "options": {}
+      },
+      "id": "011a4c2e-c31a-469a-8501-a07cedf88544",
+      "name": "Redis Get Seen",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1664,
+        1056
+      ],
+      "credentials": {
+        "redis": {
+          "id": "1GUeRisJDdlI15Hg",
+          "name": "Redis account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "489e5718-3dac-4c7b-90b6-e888414472cb",
+              "leftValue": "={{ $json.value }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7976caa3-8695-4793-af5e-f1ba1504d12b",
+      "name": "IF Nuevo mensaje",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1440,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $('Normalize').item.json.redis_seen_key }}",
+        "value": "1",
+        "expire": true,
+        "ttl": 600
+      },
+      "id": "980b535a-d23e-48e3-85c4-49d60b8b22a0",
+      "name": "Redis Set Seen",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        1056
+      ],
+      "credentials": {
+        "redis": {
+          "id": "1GUeRisJDdlI15Hg",
+          "name": "Redis account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "={{ $('Normalize').item.json.redis_session_key }}",
+        "options": {}
+      },
+      "id": "43accddf-b308-45ff-a537-93bc321dbc8a",
+      "name": "Redis Get Session",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -992,
+        960
+      ],
+      "credentials": {
+        "redis": {
+          "id": "1GUeRisJDdlI15Hg",
+          "name": "Redis account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "={{ $('Normalize').item.json.redis_outage_key }}",
+        "options": {}
+      },
+      "id": "bbb230f1-ef1e-4496-8f37-925130a1c1be",
+      "name": "Redis Get Outage",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -992,
+        1152
+      ],
+      "credentials": {
+        "redis": {
+          "id": "1GUeRisJDdlI15Hg",
+          "name": "Redis account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "86bf9f2e-b5d7-4893-bf6a-5918fe9068a3",
+      "name": "Redis Join",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -768,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function redisVal(item) {\n  if (!item || !item.json) return '';\n  const raw = item.json;\n  const val = raw.value !== undefined ? raw.value : (raw.propertyName !== undefined ? raw.propertyName : raw.data);\n  return val;\n}\n\nfunction normalizeAgent(v) {\n  const a = String(v || '').toLowerCase().trim();\n  if (a === 'facturacion' || a === 'ventas' || a === 'soporte') return a;\n  return '';\n}\n\nconst base = $('Normalize').first().json;\nlet redisSession = {};\ntry {\n  const val = redisVal($('Redis Get Session').first());\n  if (typeof val === 'string' && val) redisSession = JSON.parse(val);\n  else if (val && typeof val === 'object') redisSession = val;\n} catch (e) {}\n\nlet outage = '';\ntry {\n  const ov = redisVal($('Redis Get Outage').first());\n  if (typeof ov === 'string') outage = ov;\n} catch (e) {}\n\nconst attrs = Object.assign({}, redisSession || {}, base.attrs_contact || {}, base.attrs_conv || {});\nconst convAgent = normalizeAgent((base.attrs_conv || {}).active_agent);\nconst redisAgent = normalizeAgent((redisSession || {}).active_agent);\nconst attrAgent = normalizeAgent(attrs.active_agent);\nconst active = convAgent || redisAgent || attrAgent || 'soporte';\nconst agent = (active === 'facturacion' || active === 'ventas') ? active : 'soporte';\n\nconst prevConv = String((redisSession && redisSession.conversation_id) || '');\nconst curConv = String(base.conversation_id || '');\nlet menuState = String((redisSession && redisSession.menu_state) || '');\nlet motivo = String((redisSession && redisSession.motivo) || '');\nlet tipoDocumento = String((redisSession && redisSession.tipo_documento) || '');\nlet tipoDocumentoNombre = String((redisSession && redisSession.tipo_documento_nombre) || '');\nlet numeroDocumento = String((redisSession && redisSession.numero_documento) || '');\nlet areaDestino = String((redisSession && redisSession.area_destino) || '');\nlet nombreCliente = String((redisSession && redisSession.nombre_cliente) || '');\nlet referencias = Array.isArray(redisSession && redisSession.referencias) ? redisSession.referencias : [];\nlet referenciaElegida = String((redisSession && redisSession.referencia) || attrs.referencia || '');\nif (prevConv && curConv && prevConv !== curConv) {\n  menuState = '';\n  motivo = '';\n  tipoDocumento = '';\n  tipoDocumentoNombre = '';\n  numeroDocumento = '';\n  areaDestino = '';\n  nombreCliente = '';\n  referencias = [];\n  referenciaElegida = String(attrs.referencia || '');\n}\n\nconst session = {\n  active_agent: agent,\n  cedula: numeroDocumento || attrs.cedula || '',\n  referencia: referenciaElegida,\n  sn: attrs.sn || '',\n  onu_id: attrs.onu_id || '',\n  zona: attrs.zona || '',\n  pending_action: attrs.pending_action || '',\n  menu_state: menuState,\n  motivo: motivo,\n  conversation_id: curConv,\n  tipo_documento: tipoDocumento,\n  tipo_documento_nombre: tipoDocumentoNombre,\n  numero_documento: numeroDocumento,\n  area_destino: areaDestino,\n  nombre_cliente: nombreCliente,\n  referencias: referencias\n};\n\nconst prompt = [\n  'Mensaje del cliente:',\n  base.text,\n  '',\n  'Sesión:',\n  JSON.stringify(session),\n  motivo ? ('Motivo elegido en menú: ' + motivo) : 'Sin motivo de menú.',\n  outage ? ('DAÑO MASIVO activo: ' + outage) : 'Sin flag de daño masivo en Redis.'\n].join('\\n');\n\nreturn [{\n  json: Object.assign({}, base, {\n    active_agent: agent,\n    session,\n    outage,\n    text: prompt,\n    user_text: base.text\n  })\n}];\n"
+      },
+      "id": "dce851a7-6251-490c-9940-c15fed548701",
+      "name": "Merge Session",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "9e52ca9b-7c39-4147-8dc8-d19d991f16af",
+                    "leftValue": "={{ $json.active_agent }}",
+                    "rightValue": "facturacion",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "facturacion"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "35f47b4e-68f4-451f-a2e3-a2cee0183027",
+                    "leftValue": "={{ $json.active_agent }}",
+                    "rightValue": "ventas",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ventas"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "soporte"
+        }
+      },
+      "id": "4e5f767b-d6a0-4a57-ba8c-6b09504a615d",
+      "name": "Switch Agente",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -320,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "1c491833-5668-4e36-999b-423917ab8063",
+      "name": "Modelo Soporte",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -96,
+        784
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "8pOPvsQCku3hoGNY",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Merge Session').first().json.session_key }}",
+        "contextWindowLength": 16
+      },
+      "id": "afd3806b-7641-449a-a63c-9f93368caea3",
+      "name": "Memoria Soporte",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        48,
+        784
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "cdw9P83TTiiupxZt",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "Eres el agente de Soporte de Búho Net (ISP). Eres el punto de entrada de TODO chat. Hablas español, claro y breve.\n\nIdentidad:\n- Si no hay cédula ni referencia en el contexto de sesión, pídelas (cédula colombiana o código tipo MED0142).\n- Llama sima_cliente y luego save_identity con los datos encontrados.\n- No inventes IDs, SN, saldos ni estados. Si una tool falla o viene vacía, dilo.\n\nInventario SmartOLT (piloto): puedes listar OLTs, ONUs, LOS, offline, PON, tarjetas, temperatura, buscar por SN y ver estado de ONU. Resume en texto; NUNCA pegues JSON crudo.\n\nLímites:\n- Recibos, saldo, factura: NO los resuelvas. Llama transfer_facturacion y dile al cliente que el siguiente mensaje lo atiende Facturación.\n- Plan nuevo, mudanza, ventas: llama transfer_ventas igual.\n- Pedir un asesor humano: llama handoff_humano.\n- reboot_onu hoy NO está conectado a SmartOLT; si el cliente pide reinicio, llama la tool y explica que aún no está disponible. NUNCA digas que ya reiniciaste el equipo.\n- Si el contexto trae daño masivo, infórmalo ANTES de diagnosticar o sugerir reboot.\n\nConfirmaciones: no ejecutes acciones destructivas sin un \"sí\" claro del cliente.\nMáximo 2-3 preguntas por turno.\n\nMenú (si el mensaje trae \"Motivo elegido en menú\"):\n- falla_tecnica: ya le pedimos el documento y la descripción de la falla. Si falta la cédula, pídela. Consulta SIMA y SmartOLT y resume en texto. Si no lo resuelves, llama handoff_humano.\n- cambio_wifi: pide la cédula y el nombre o la contraseña nuevos. El nombre de la red no lleva espacios (usa - o _). La contraseña debe tener más de 15 caracteres, letras y números. No hay API para cambiar el WiFi: cuando tengas los datos llama siempre handoff_humano. Nunca digas que ya cambiaste la red.\n- pqr: pide la cédula, consulta PQRS, toma la descripción y llama handoff_humano.\n\nSi la sesión ya trae referencia y cédula, el cliente está identificado. No vuelvas a pedir el documento ni la referencia. Úsalos en SIMA y en las demás tools.",
+          "maxIterations": 8
+        }
+      },
+      "id": "a7537dac-9217-4059-84d1-82283804eb51",
+      "name": "Agente Soporte",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        992,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "91a8b6af-358b-48e9-9beb-a496b21c8843",
+      "name": "Modelo Facturación",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        752,
+        1184
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "8pOPvsQCku3hoGNY",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Merge Session').first().json.session_key }}",
+        "contextWindowLength": 16
+      },
+      "id": "0edcb808-26bb-492b-9416-4127644c8898",
+      "name": "Memoria Facturación",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        1184
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "cdw9P83TTiiupxZt",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "Eres el agente de Facturación de Búho Net. Solo atiendes saldo, servicios activos, recibos y pagos.\n\nUsa sima_cliente y sima_recibos. No inventes valores ni fechas.\nSi el tema es falla técnica, internet, ONU o PQR: llama transfer_soporte y dile que el siguiente mensaje lo atiende Soporte.\nSi pide contabilidad (notas crédito, cartera especial): llama handoff_contabilidad.\nEspañol breve. Sin JSON crudo.\n\nSi el mensaje trae \"Motivo elegido en menú: factura\": el portal buhonet.sima-app.com/pagos/portal ya se envió. No lo repitas salvo que lo pidan. Atiende la duda con sima_cliente y sima_recibos. Si no puedes resolverla, llama handoff_contabilidad.\n\nSi la sesión ya trae referencia y cédula, el cliente está identificado. No vuelvas a pedir el documento. Consulta la cuenta de esa referencia.",
+          "maxIterations": 8
+        }
+      },
+      "id": "b87f62fe-a168-41cc-b4b8-dc4eb19a6876",
+      "name": "Agente Facturación",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        992,
+        944
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "a405019d-a61a-4912-aaa3-8526a7fb4384",
+      "name": "Modelo Ventas",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        816,
+        1680
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "8pOPvsQCku3hoGNY",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Merge Session').first().json.session_key }}",
+        "contextWindowLength": 16
+      },
+      "id": "186e1ea8-fd1d-444c-8fdf-647ecbaecfe9",
+      "name": "Memoria Ventas",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        944,
+        1680
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "cdw9P83TTiiupxZt",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "Eres el agente comercial de Búho Net. Tono natural, no robots ni menús largos.\n\nSIMA (tool SIMA Cliente Ventas):\n- Solo cédula (dígitos) o código de contrato tipo MED0142.\n- Sirve para ver el plan/contrato ACTUAL del cliente.\n- El parámetro search NUNCA es ciudad, zona ni municipio (ej. Chía). Eso no es referencia SIMA.\n- No hay API de tarifas ni cobertura por ciudad. No inventes precios ni planes.\n\nSi piden precio, disponibilidad o planes en una zona y SIMA no trae ese dato: dilo claro y ofrece pasar a un asesor humano (handoff_ventas_humano). No digas error técnico por falta de tarifa de zona.\n\nFallas técnicas o PQR: transfer_soporte.\nSi pide un asesor comercial humano: handoff_ventas_humano.\nEspañol conversacional y breve. Sin JSON crudo.\n\nSi el mensaje trae \"Motivo elegido en menú: lead\":\n- El menú ya preguntó el nombre. Pide de a una sola cosa lo que falte: nombre, dirección o conjunto, y si quiere solo internet o con TV.\n- Cuando tengas los tres, llama la tool Guardar Lead Ventas y después handoff_ventas_humano.",
+          "maxIterations": 8
+        }
+      },
+      "id": "48ec4d21-c118-4d43-b30c-dd965a1b510c",
+      "name": "Agente Ventas",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        992,
+        1456
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Busca un cliente en SIMA por cédula (numero_documento, solo dígitos) o referencia de contrato (search, tipo MED0142). Devuelve plan y estado de contrato. NUNCA pongas ciudad, zona ni municipio en search.",
+        "source": "parameter",
+        "workflowJson": "{\"name\": \"SIMA Buscar Cliente\", \"nodes\": [{\"parameters\": {\"inputSource\": \"workflowInputs\", \"workflowInputs\": {\"values\": [{\"name\": \"numero_documento\", \"type\": \"string\"}, {\"name\": \"search\", \"type\": \"string\"}]}}, \"id\": \"a1e2b3c4-d5e6-7890-ab12-sima-trigger01\", \"name\": \"When Executed by Another Workflow\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0]}, {\"parameters\": {\"jsCode\": \"const j = $input.first().json || {};\\nconst doc = String(j.numero_documento || j.cedula || j.query || '').replace(/\\\\D/g, '');\\nlet search = String(j.search || j.referencia || '').trim();\\nif (search && !/[0-9]/.test(search)) search = '';\\nconst rawSearch = String(j.search || '').trim();\\nif (!doc && !search) {\\n  return [{\\n    json: {\\n      ok: false,\\n      error: 'SIMA requiere cédula (solo dígitos) o referencia de contrato tipo MED0142. Ciudad, zona o municipio no son parámetros válidos.',\\n      skipped_city_search: Boolean(rawSearch)\\n    }\\n  }];\\n}\\nconst u = new URL('https://buhonet.sima-app.com/api/v1/clientes');\\nu.searchParams.set('per_page', '10');\\nif (doc) u.searchParams.set('numero_documento', doc);\\nif (search) u.searchParams.set('search', search);\\nreturn [{ json: { ok: true, url: u.toString(), skipped_city_search: Boolean(rawSearch) && !search } }];\\n\"}, \"id\": \"b2c3d4e5-f6a7-8901-bc23-sima-prep0002\", \"name\": \"Armar Query SIMA\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [240, 0]}, {\"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"loose\", \"version\": 2}, \"conditions\": [{\"id\": \"d4e5f6a7-b8c9-0123-de45-sima-if-ok01\", \"leftValue\": \"={{ $json.ok }}\", \"rightValue\": true, \"operator\": {\"type\": \"boolean\", \"operation\": \"true\", \"singleValue\": true}}], \"combinator\": \"and\"}, \"options\": {}}, \"id\": \"c3d4e5f6-a7b8-9012-cd34-sima-if00003\", \"name\": \"IF Query Válida\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2.2, \"position\": [480, 0]}, {\"parameters\": {\"method\": \"GET\", \"url\": \"={{ $json.url }}\", \"authentication\": \"genericCredentialType\", \"genericAuthType\": \"httpHeaderAuth\", \"options\": {\"response\": {\"response\": {\"neverError\": true}}, \"timeout\": 30000}}, \"id\": \"d4e5f6a7-b8c9-0123-de45-sima-http0004\", \"name\": \"GET SIMA Clientes\", \"type\": \"n8n-nodes-base.httpRequest\", \"typeVersion\": 4.2, \"position\": [720, -80], \"credentials\": {\"httpHeaderAuth\": {\"id\": \"0vTg2pDTdy0JK04X\", \"name\": \"Token Sima\"}}, \"onError\": \"continueRegularOutput\"}, {\"parameters\": {\"jsCode\": \"return $input.all();\\n\"}, \"id\": \"e5f6a7b8-c9d0-1234-ef56-sima-err00005\", \"name\": \"Respuesta Error\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [720, 120]}], \"connections\": {\"When Executed by Another Workflow\": {\"main\": [[{\"node\": \"Armar Query SIMA\", \"type\": \"main\", \"index\": 0}]]}, \"Armar Query SIMA\": {\"main\": [[{\"node\": \"IF Query Válida\", \"type\": \"main\", \"index\": 0}]]}, \"IF Query Válida\": {\"main\": [[{\"node\": \"GET SIMA Clientes\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Respuesta Error\", \"type\": \"main\", \"index\": 0}]]}}, \"settings\": {\"executionOrder\": \"v1\", \"callerPolicy\": \"workflowsFromSameOwner\"}}",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "numero_documento": "={{ $fromAI('numero_documento', 'Cedula colombiana solo digitos. Vacio si usas referencia MED0142.', 'string') }}",
+            "search": "={{ $fromAI('search', 'Referencia SIMA tipo MED0142. NUNCA ciudad, zona ni municipio.', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "numero_documento",
+              "displayName": "numero_documento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "search",
+              "displayName": "search",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "91c832c9-5b39-417d-859e-85822c67e0a8",
+      "name": "SIMA Cliente Soporte",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        176,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Lista órdenes de servicio SIMA de un cliente. Requiere referencia SIMA (ej. MED0142).",
+        "url": "https://buhonet.sima-app.com/api/v1/ordenes-servicio",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "referencia",
+              "valueProvider": "modelRequired"
+            },
+            {
+              "name": "per_page",
+              "valueProvider": "fieldValue",
+              "value": "10"
+            }
+          ]
+        }
+      },
+      "id": "f6b2abd7-4e94-4d9a-bca0-e73a163008f4",
+      "name": "SIMA Ordenes",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        304,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0vTg2pDTdy0JK04X",
+          "name": "Token Sima"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Consulta PQRS en buho-net.com por cédula. Resume radicado, estado, fechas, tipo, respuesta.",
+        "url": "https://www.buho-net.com/api/pqrs/{{ $fromAI('cedula', 'Cédula solo dígitos', 'string') }}"
+      },
+      "id": "e1eea302-a346-430e-8a4f-b5ba4520129a",
+      "name": "PQRS",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        432,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Lista las OLTs de SmartOLT. Resume id y nombre. No pegues JSON crudo al cliente.",
+        "url": "https://buho-net.smartolt.com/api/system/get_olts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "Accept",
+              "valueProvider": "fieldValue",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "id": "cd44481a-72c0-4be9-b53b-a4ce47657f69",
+      "name": "SmartOLT Listar OLTs",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Lista ONUs (página 1, 50 ítems). Resume SN, estado, OLT. No pegues JSON crudo.",
+        "url": "https://buho-net.smartolt.com/api/onu/get_all_onus_details",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "page",
+              "valueProvider": "fieldValue",
+              "value": "1"
+            },
+            {
+              "name": "page_size",
+              "valueProvider": "fieldValue",
+              "value": "50"
+            }
+          ]
+        }
+      },
+      "id": "9e0b6cac-77da-468a-ad8e-f4a25bc66e49",
+      "name": "SmartOLT Listar ONUs",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        688,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Busca una ONU por serial/SN en SmartOLT.",
+        "url": "https://buho-net.smartolt.com/api/onu/get_all_onus_details",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "sn",
+              "valueProvider": "modelRequired"
+            }
+          ]
+        }
+      },
+      "id": "2c7ae830-5ecc-4267-a5e0-fc07c3f847c6",
+      "name": "SmartOLT Buscar ONU",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        816,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Puertos PON de una OLT. Requiere olt_id numérico.",
+        "url": "https://buho-net.smartolt.com/api/system/get_olt_pon_ports_details/{{ $fromAI('olt_id', 'ID de OLT en SmartOLT', 'string') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "a62737b1-01d3-430a-b6ab-5dcaa69a451e",
+      "name": "SmartOLT PON",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        944,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Tarjetas/boards de una OLT. Requiere olt_id.",
+        "url": "https://buho-net.smartolt.com/api/system/get_olt_cards_details/{{ $fromAI('olt_id', 'ID de OLT en SmartOLT', 'string') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "18f2a2aa-0d14-4d57-9492-048ad088f50c",
+      "name": "SmartOLT Cards",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1072,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Temperatura ambiental y uptime de las OLTs.",
+        "url": "https://buho-net.smartolt.com/api/olt/get_olts_uptime_and_env_temperature",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "26899d4e-3382-4b06-8d44-276d7f3d145e",
+      "name": "SmartOLT Temperatura",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "ONUs en LOS. Resume conteo y SN. No JSON crudo.",
+        "url": "https://buho-net.smartolt.com/api/onu/get_all_onus_details",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "status",
+              "valueProvider": "fieldValue",
+              "value": "los"
+            },
+            {
+              "name": "page",
+              "valueProvider": "fieldValue",
+              "value": "1"
+            },
+            {
+              "name": "page_size",
+              "valueProvider": "fieldValue",
+              "value": "50"
+            }
+          ]
+        }
+      },
+      "id": "29b77502-210a-496e-b745-2703ee0e03ea",
+      "name": "SmartOLT ONUs LOS",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "ONUs offline. Resume conteo y SN.",
+        "url": "https://buho-net.smartolt.com/api/onu/get_all_onus_details",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "status",
+              "valueProvider": "fieldValue",
+              "value": "offline"
+            },
+            {
+              "name": "page",
+              "valueProvider": "fieldValue",
+              "value": "1"
+            },
+            {
+              "name": "page_size",
+              "valueProvider": "fieldValue",
+              "value": "50"
+            }
+          ]
+        }
+      },
+      "id": "3524466d-b057-4d0f-ad29-0fa5c9640dd9",
+      "name": "SmartOLT ONUs Offline",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1456,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Estado y señal (si viene en la respuesta) de una ONU por onu_id externo SmartOLT.",
+        "url": "https://buho-net.smartolt.com/api/onu/get_onu_status/{{ $fromAI('onu_id', 'ID externo de ONU en SmartOLT', 'string') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "2940af1d-1fc0-409b-bfa6-f22e21ae05a5",
+      "name": "SmartOLT Estado ONU",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1584,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Reinicio remoto de ONU/router. Hoy no hay endpoint; devuelve endpoint_not_configured. No simules un reboot exitoso.",
+        "jsCode": "return JSON.stringify({ ok: false, reason: 'endpoint_not_configured' });"
+      },
+      "id": "d0d94226-4e33-47c7-b8ed-16cc5751b802",
+      "name": "Reboot ONU",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1712,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Transfiere el chat a Facturación. Llámalo cuando el cliente pregunte por recibos, pagos, saldo o factura. El siguiente mensaje lo atiende Facturación.",
+        "method": "POST",
+        "url": "={{ $('Merge Session').first().json.chatwoot_base_url + '/api/v1/accounts/' + $('Merge Session').first().json.account_id + '/conversations/' + $('Merge Session').first().json.conversation_id + '/custom_attributes' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"custom_attributes\":{\"active_agent\":\"facturacion\"}}"
+      },
+      "id": "15802c24-b490-4a87-9e16-b006dff792dc",
+      "name": "Transfer Facturación",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1840,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Transfiere el chat a Ventas/comercial. El siguiente mensaje lo atiende Ventas.",
+        "method": "POST",
+        "url": "={{ $('Merge Session').first().json.chatwoot_base_url + '/api/v1/accounts/' + $('Merge Session').first().json.account_id + '/conversations/' + $('Merge Session').first().json.conversation_id + '/custom_attributes' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"custom_attributes\":{\"active_agent\":\"ventas\"}}"
+      },
+      "id": "9eeab222-5cbb-4c04-ad81-7a6bd263114b",
+      "name": "Transfer Ventas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1968,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Pasa la conversación a un asesor humano de soporte (status open). Úsalo si el cliente pide persona o no puedes resolver.",
+        "jsCode": "return JSON.stringify({ ok: true, handoff: 'soporte' });"
+      },
+      "id": "415c1038-db1b-4f05-bc8a-cd226e32ce21",
+      "name": "Handoff Humano Soporte",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        2096,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Guarda cédula, referencia, SN y onu_id en el contacto Chatwoot después de identificar al cliente en SIMA.",
+        "method": "PATCH",
+        "url": "={{ $('Merge Session').first().json.chatwoot_base_url + '/api/v1/accounts/' + $('Merge Session').first().json.account_id + '/contacts/' + $('Merge Session').first().json.contact_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ custom_attributes: {cedula: $fromAI('cedula', 'Cédula solo dígitos', 'string'), referencia: $fromAI('referencia', 'Referencia SIMA tipo MED0142', 'string'), sn: $fromAI('sn', 'SN ONU si se conoce', 'string'), onu_id: $fromAI('onu_id', 'ID ONU si se conoce', 'string'), zona: $fromAI('zona', 'Zona si se conoce', 'string')} }) }}"
+      },
+      "id": "28d3c183-c78d-4a51-ba95-50b586933247",
+      "name": "Save Identity",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        2224,
+        784
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Busca un cliente en SIMA por cédula (numero_documento, solo dígitos) o referencia de contrato (search, tipo MED0142). Devuelve plan y estado de contrato. NUNCA pongas ciudad, zona ni municipio en search.",
+        "source": "parameter",
+        "workflowJson": "{\"name\": \"SIMA Buscar Cliente\", \"nodes\": [{\"parameters\": {\"inputSource\": \"workflowInputs\", \"workflowInputs\": {\"values\": [{\"name\": \"numero_documento\", \"type\": \"string\"}, {\"name\": \"search\", \"type\": \"string\"}]}}, \"id\": \"a1e2b3c4-d5e6-7890-ab12-sima-trigger01\", \"name\": \"When Executed by Another Workflow\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0]}, {\"parameters\": {\"jsCode\": \"const j = $input.first().json || {};\\nconst doc = String(j.numero_documento || j.cedula || j.query || '').replace(/\\\\D/g, '');\\nlet search = String(j.search || j.referencia || '').trim();\\nif (search && !/[0-9]/.test(search)) search = '';\\nconst rawSearch = String(j.search || '').trim();\\nif (!doc && !search) {\\n  return [{\\n    json: {\\n      ok: false,\\n      error: 'SIMA requiere cédula (solo dígitos) o referencia de contrato tipo MED0142. Ciudad, zona o municipio no son parámetros válidos.',\\n      skipped_city_search: Boolean(rawSearch)\\n    }\\n  }];\\n}\\nconst u = new URL('https://buhonet.sima-app.com/api/v1/clientes');\\nu.searchParams.set('per_page', '10');\\nif (doc) u.searchParams.set('numero_documento', doc);\\nif (search) u.searchParams.set('search', search);\\nreturn [{ json: { ok: true, url: u.toString(), skipped_city_search: Boolean(rawSearch) && !search } }];\\n\"}, \"id\": \"b2c3d4e5-f6a7-8901-bc23-sima-prep0002\", \"name\": \"Armar Query SIMA\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [240, 0]}, {\"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"loose\", \"version\": 2}, \"conditions\": [{\"id\": \"d4e5f6a7-b8c9-0123-de45-sima-if-ok01\", \"leftValue\": \"={{ $json.ok }}\", \"rightValue\": true, \"operator\": {\"type\": \"boolean\", \"operation\": \"true\", \"singleValue\": true}}], \"combinator\": \"and\"}, \"options\": {}}, \"id\": \"c3d4e5f6-a7b8-9012-cd34-sima-if00003\", \"name\": \"IF Query Válida\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2.2, \"position\": [480, 0]}, {\"parameters\": {\"method\": \"GET\", \"url\": \"={{ $json.url }}\", \"authentication\": \"genericCredentialType\", \"genericAuthType\": \"httpHeaderAuth\", \"options\": {\"response\": {\"response\": {\"neverError\": true}}, \"timeout\": 30000}}, \"id\": \"d4e5f6a7-b8c9-0123-de45-sima-http0004\", \"name\": \"GET SIMA Clientes\", \"type\": \"n8n-nodes-base.httpRequest\", \"typeVersion\": 4.2, \"position\": [720, -80], \"credentials\": {\"httpHeaderAuth\": {\"id\": \"0vTg2pDTdy0JK04X\", \"name\": \"Token Sima\"}}, \"onError\": \"continueRegularOutput\"}, {\"parameters\": {\"jsCode\": \"return $input.all();\\n\"}, \"id\": \"e5f6a7b8-c9d0-1234-ef56-sima-err00005\", \"name\": \"Respuesta Error\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [720, 120]}], \"connections\": {\"When Executed by Another Workflow\": {\"main\": [[{\"node\": \"Armar Query SIMA\", \"type\": \"main\", \"index\": 0}]]}, \"Armar Query SIMA\": {\"main\": [[{\"node\": \"IF Query Válida\", \"type\": \"main\", \"index\": 0}]]}, \"IF Query Válida\": {\"main\": [[{\"node\": \"GET SIMA Clientes\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Respuesta Error\", \"type\": \"main\", \"index\": 0}]]}}, \"settings\": {\"executionOrder\": \"v1\", \"callerPolicy\": \"workflowsFromSameOwner\"}}",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "numero_documento": "={{ $fromAI('numero_documento', 'Cedula colombiana solo digitos. Vacio si usas referencia MED0142.', 'string') }}",
+            "search": "={{ $fromAI('search', 'Referencia SIMA tipo MED0142. NUNCA ciudad, zona ni municipio.', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "numero_documento",
+              "displayName": "numero_documento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "search",
+              "displayName": "search",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "6ff9cae4-3aae-4a6e-bb91-b472da1f3230",
+      "name": "SIMA Cliente Facturación",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1008,
+        1184
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Consulta recibos/pagos SIMA por numero_recibo, cédula o referencia.",
+        "url": "https://buhonet.sima-app.com/api/v1/recibos/consultar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "numero_recibo",
+              "valueProvider": "modelOptional"
+            },
+            {
+              "name": "numero_documento",
+              "valueProvider": "modelOptional"
+            },
+            {
+              "name": "referencia",
+              "valueProvider": "modelOptional"
+            },
+            {
+              "name": "per_page",
+              "valueProvider": "fieldValue",
+              "value": "10"
+            }
+          ]
+        }
+      },
+      "id": "8e25d0fc-e1e4-43f2-bded-a7c0afcb2efb",
+      "name": "SIMA Recibos",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1136,
+        1184
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0vTg2pDTdy0JK04X",
+          "name": "Token Sima"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Devuelve el chat a Soporte. El siguiente mensaje lo atiende Soporte.",
+        "method": "POST",
+        "url": "={{ $('Merge Session').first().json.chatwoot_base_url + '/api/v1/accounts/' + $('Merge Session').first().json.account_id + '/conversations/' + $('Merge Session').first().json.conversation_id + '/custom_attributes' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"custom_attributes\":{\"active_agent\":\"soporte\"}}"
+      },
+      "id": "2cd6a1e6-7f7e-4d8d-a444-f8e94be78e31",
+      "name": "Transfer Soporte desde Facturación",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1264,
+        1184
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Pasa a un humano del equipo de contabilidad (status open).",
+        "jsCode": "return JSON.stringify({ ok: true, handoff: 'contabilidad' });"
+      },
+      "id": "fd536c8a-e4d4-4c1e-a6cc-d4792fdfbb85",
+      "name": "Handoff Contabilidad",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1392,
+        1184
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Busca un cliente en SIMA por cédula (numero_documento, solo dígitos) o referencia de contrato (search, tipo MED0142). Devuelve plan y estado de contrato. NUNCA pongas ciudad, zona ni municipio en search.",
+        "source": "parameter",
+        "workflowJson": "{\"name\": \"SIMA Buscar Cliente\", \"nodes\": [{\"parameters\": {\"inputSource\": \"workflowInputs\", \"workflowInputs\": {\"values\": [{\"name\": \"numero_documento\", \"type\": \"string\"}, {\"name\": \"search\", \"type\": \"string\"}]}}, \"id\": \"a1e2b3c4-d5e6-7890-ab12-sima-trigger01\", \"name\": \"When Executed by Another Workflow\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0]}, {\"parameters\": {\"jsCode\": \"const j = $input.first().json || {};\\nconst doc = String(j.numero_documento || j.cedula || j.query || '').replace(/\\\\D/g, '');\\nlet search = String(j.search || j.referencia || '').trim();\\nif (search && !/[0-9]/.test(search)) search = '';\\nconst rawSearch = String(j.search || '').trim();\\nif (!doc && !search) {\\n  return [{\\n    json: {\\n      ok: false,\\n      error: 'SIMA requiere cédula (solo dígitos) o referencia de contrato tipo MED0142. Ciudad, zona o municipio no son parámetros válidos.',\\n      skipped_city_search: Boolean(rawSearch)\\n    }\\n  }];\\n}\\nconst u = new URL('https://buhonet.sima-app.com/api/v1/clientes');\\nu.searchParams.set('per_page', '10');\\nif (doc) u.searchParams.set('numero_documento', doc);\\nif (search) u.searchParams.set('search', search);\\nreturn [{ json: { ok: true, url: u.toString(), skipped_city_search: Boolean(rawSearch) && !search } }];\\n\"}, \"id\": \"b2c3d4e5-f6a7-8901-bc23-sima-prep0002\", \"name\": \"Armar Query SIMA\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [240, 0]}, {\"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"loose\", \"version\": 2}, \"conditions\": [{\"id\": \"d4e5f6a7-b8c9-0123-de45-sima-if-ok01\", \"leftValue\": \"={{ $json.ok }}\", \"rightValue\": true, \"operator\": {\"type\": \"boolean\", \"operation\": \"true\", \"singleValue\": true}}], \"combinator\": \"and\"}, \"options\": {}}, \"id\": \"c3d4e5f6-a7b8-9012-cd34-sima-if00003\", \"name\": \"IF Query Válida\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2.2, \"position\": [480, 0]}, {\"parameters\": {\"method\": \"GET\", \"url\": \"={{ $json.url }}\", \"authentication\": \"genericCredentialType\", \"genericAuthType\": \"httpHeaderAuth\", \"options\": {\"response\": {\"response\": {\"neverError\": true}}, \"timeout\": 30000}}, \"id\": \"d4e5f6a7-b8c9-0123-de45-sima-http0004\", \"name\": \"GET SIMA Clientes\", \"type\": \"n8n-nodes-base.httpRequest\", \"typeVersion\": 4.2, \"position\": [720, -80], \"credentials\": {\"httpHeaderAuth\": {\"id\": \"0vTg2pDTdy0JK04X\", \"name\": \"Token Sima\"}}, \"onError\": \"continueRegularOutput\"}, {\"parameters\": {\"jsCode\": \"return $input.all();\\n\"}, \"id\": \"e5f6a7b8-c9d0-1234-ef56-sima-err00005\", \"name\": \"Respuesta Error\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [720, 120]}], \"connections\": {\"When Executed by Another Workflow\": {\"main\": [[{\"node\": \"Armar Query SIMA\", \"type\": \"main\", \"index\": 0}]]}, \"Armar Query SIMA\": {\"main\": [[{\"node\": \"IF Query Válida\", \"type\": \"main\", \"index\": 0}]]}, \"IF Query Válida\": {\"main\": [[{\"node\": \"GET SIMA Clientes\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Respuesta Error\", \"type\": \"main\", \"index\": 0}]]}}, \"settings\": {\"executionOrder\": \"v1\", \"callerPolicy\": \"workflowsFromSameOwner\"}}",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "numero_documento": "={{ $fromAI('numero_documento', 'Cedula colombiana solo digitos. Vacio si usas referencia MED0142.', 'string') }}",
+            "search": "={{ $fromAI('search', 'Referencia SIMA tipo MED0142. NUNCA ciudad, zona ni municipio.', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "numero_documento",
+              "displayName": "numero_documento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "search",
+              "displayName": "search",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "c02f1afb-35d5-4796-837b-81e786ca76c5",
+      "name": "SIMA Cliente Ventas",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        1680
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Devuelve el chat a Soporte.",
+        "method": "POST",
+        "url": "={{ $('Merge Session').first().json.chatwoot_base_url + '/api/v1/accounts/' + $('Merge Session').first().json.account_id + '/conversations/' + $('Merge Session').first().json.conversation_id + '/custom_attributes' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"custom_attributes\":{\"active_agent\":\"soporte\"}}"
+      },
+      "id": "203cfb58-cda3-416d-b7bb-81e76d9b2d41",
+      "name": "Transfer Soporte desde Ventas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        1680
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Pasa a un asesor comercial humano (status open).",
+        "jsCode": "return JSON.stringify({ ok: true, handoff: 'ventas' });"
+      },
+      "id": "62291a9b-fe3b-49bd-a4ed-5baa45909368",
+      "name": "Handoff Ventas Humano",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1328,
+        1680
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "let prev = $('Router Menú').first().json;\ntry { if ($('Interpretar identidad').isExecuted) prev = $('Interpretar identidad').first().json; } catch (e) {}\nconst out = $input.first().json;\nlet reply = String(out.output !== undefined ? out.output : (out.text || '')).trim();\nif (!reply) reply = 'No pude generar una respuesta. Intenta de nuevo en un momento.';\nif (reply.length > 4000) reply = reply.slice(0, 3900) + '\\n…';\n\nconst session = Object.assign({}, prev.session || {});\n\nfunction ran(name) {\n  try { return $(name).isExecuted; } catch (e) { return false; }\n}\n\nfunction collectToolNames(obj, acc, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 8) return;\n  if (Array.isArray(obj)) {\n    obj.forEach((x) => collectToolNames(x, acc, depth + 1));\n    return;\n  }\n  for (const [k, v] of Object.entries(obj)) {\n    if ((k === 'tool' || k === 'toolName' || k === 'name') && typeof v === 'string') acc.push(v);\n    if (k === 'action' && v && typeof v === 'object' && typeof v.tool === 'string') acc.push(v.tool);\n    if (v && typeof v === 'object') collectToolNames(v, acc, depth + 1);\n  }\n}\n\nif (ran('Transfer Ventas')) session.active_agent = 'ventas';\nelse if (ran('Transfer Facturación')) session.active_agent = 'facturacion';\nelse if (ran('Transfer Soporte desde Facturación') || ran('Transfer Soporte desde Ventas')) session.active_agent = 'soporte';\nelse {\n  const names = [];\n  collectToolNames(out.intermediateSteps || out.intermediate_steps || [], names, 0);\n  const blob = names.join(' | ').toLowerCase();\n  if (/\\btransfer ventas\\b/.test(blob)) session.active_agent = 'ventas';\n  else if (/transfer factur/.test(blob)) session.active_agent = 'facturacion';\n  else if (/transfer soporte/.test(blob)) session.active_agent = 'soporte';\n}\n\nlet handoff_team = '';\nif (ran('Handoff Ventas Humano')) handoff_team = 'ventas';\nelse if (ran('Handoff Contabilidad')) handoff_team = 'contabilidad';\nelse if (ran('Handoff Humano Soporte')) handoff_team = 'soporte';\nelse {\n  const names = [];\n  collectToolNames(out.intermediateSteps || out.intermediate_steps || [], names, 0);\n  const blob = names.join(' | ').toLowerCase();\n  if (/handoff ventas/.test(blob) || /\\bhandoff:[\"']?ventas/.test(blob)) handoff_team = 'ventas';\n  else if (/handoff contabilidad/.test(blob)) handoff_team = 'contabilidad';\n  else if (/handoff humano soporte/.test(blob)) handoff_team = 'soporte';\n}\n\nlet cfg = {};\ntry { cfg = $('Config').first().json || {}; } catch (e) {}\nlet norm = {};\ntry { norm = $('Normalize').first().json || {}; } catch (e) {}\n\nconst teamMap = {\n  ventas: Number(cfg.team_id_ventas || prev.team_id_ventas || 0),\n  contabilidad: Number(cfg.team_id_contabilidad || prev.team_id_contabilidad || 0),\n  soporte: Number(cfg.team_id_soporte || prev.team_id_soporte || 0)\n};\nconst handoff_team_id = handoff_team ? (teamMap[handoff_team] || 0) : 0;\n\nconst menu_items = Array.isArray(prev.menu_items) ? prev.menu_items : [];\nconst use_buttons = menu_items.length > 0 && cfg.menu_botones !== false && cfg.menu_botones !== 0 && String(cfg.menu_botones) !== 'false';\n\nreturn [{\n  json: {\n    reply,\n    account_id: prev.account_id || norm.account_id,\n    conversation_id: prev.conversation_id || norm.conversation_id,\n    contact_id: prev.contact_id || norm.contact_id,\n    chatwoot_base_url: prev.chatwoot_base_url || cfg.chatwoot_base_url,\n    redis_session_key: prev.redis_session_key || norm.redis_session_key,\n    session_json: JSON.stringify(session),\n    session,\n    handoff_team,\n    handoff_team_id,\n    menu_items,\n    use_buttons\n  }\n}];\n"
+      },
+      "id": "5f4287b2-3064-4ee8-9fd1-73a3c4f066c1",
+      "name": "Prepare Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $('Prepare Reply').first().json.redis_session_key }}",
+        "value": "={{ $('Prepare Reply').first().json.session_json }}",
+        "keyType": "string",
+        "expire": true,
+        "ttl": 86400
+      },
+      "id": "f2da03af-31a5-4c7a-b860-9dfde301eb58",
+      "name": "Redis Set Session",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        1056
+      ],
+      "credentials": {
+        "redis": {
+          "id": "1GUeRisJDdlI15Hg",
+          "name": "Redis account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare Reply').first().json.chatwoot_base_url + '/api/v1/accounts/' + $('Prepare Reply').first().json.account_id + '/conversations/' + $('Prepare Reply').first().json.conversation_id + '/messages' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify(Object.assign({ content: $('Prepare Reply').first().json.reply, private: false, message_type: 'outgoing' }, $('Prepare Reply').first().json.use_buttons ? { content_type: 'input_select', content_attributes: { items: $('Prepare Reply').first().json.menu_items } } : {})) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "810149d7-cf25-4d36-985c-b874a28beb37",
+      "name": "Enviar a Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3088,
+        1056
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8fc6144c-abbb-46d0-a19e-c4f8ab95f3b6",
+              "leftValue": "={{ $json.handoff_team }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c32b0461-44a7-480d-971c-efcc48bc9ad5",
+      "name": "IF Handoff",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2528,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Prepare Reply').first().json.chatwoot_base_url + '/api/v1/accounts/' + $('Prepare Reply').first().json.account_id + '/conversations/' + $('Prepare Reply').first().json.conversation_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'open', team_id: $('Prepare Reply').first().json.handoff_team_id || undefined }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "outputPropertyName": "handoff_result"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "5b8c50ec-84a6-4df8-bf24-db10fd2e26d6",
+      "name": "HTTP Handoff",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2528,
+        1280
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $input.first().json;\nconst session = Object.assign({}, prev.session || {});\nconst userRaw = String(prev.user_text || '').trim();\n\nfunction norm(s) {\n  return String(s || '')\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nconst user = norm(userRaw);\n\nfunction numbered(intro, items) {\n  const lines = items.map((it, i) => (i + 1) + '. ' + it.title);\n  return intro.replace(/\\s+$/, '') + '\\n\\n' + lines.join('\\n');\n}\n\nfunction promptFor(sess) {\n  return [\n    'Mensaje del cliente:',\n    prev.user_text || '',\n    '',\n    'Sesión:',\n    JSON.stringify(sess),\n    sess.motivo ? ('Motivo elegido en menú: ' + sess.motivo) : 'Sin motivo de menú.',\n    sess.referencia ? ('Referencia elegida: ' + sess.referencia) : '',\n    prev.outage ? ('DAÑO MASIVO activo: ' + prev.outage) : 'Sin flag de daño masivo en Redis.'\n  ].filter(function (line) { return line !== ''; }).join('\\n');\n}\n\nfunction clearIdentity() {\n  session.tipo_documento = '';\n  session.tipo_documento_nombre = '';\n  session.numero_documento = '';\n  session.area_destino = '';\n  session.referencias = [];\n  session.referencia = '';\n  session.nombre_cliente = '';\n  session.cedula = '';\n  session.motivo = '';\n}\n\nfunction menuResult(state, motivo, agent, reply, items) {\n  session.menu_state = state;\n  if (motivo !== null && motivo !== undefined) session.motivo = motivo;\n  if (agent) session.active_agent = agent;\n  return [{\n    json: Object.assign({}, prev, {\n      session: session,\n      active_agent: session.active_agent,\n      route: 'menu',\n      output: reply,\n      menu_items: items || [],\n      text: promptFor(session)\n    })\n  }];\n}\n\nfunction agentResult(agent, motivo) {\n  session.menu_state = 'done';\n  if (motivo !== null && motivo !== undefined) session.motivo = motivo;\n  if (agent) session.active_agent = agent;\n  const copy = Object.assign({}, prev, {\n    session: session,\n    active_agent: session.active_agent,\n    route: 'agente',\n    menu_items: [],\n    text: promptFor(session)\n  });\n  delete copy.output;\n  return [{ json: copy }];\n}\n\nfunction buscarResult() {\n  session.menu_state = 'buscando';\n  const copy = Object.assign({}, prev, {\n    session: session,\n    active_agent: session.active_agent,\n    route: 'buscar_cliente',\n    menu_items: [],\n    text: promptFor(session)\n  });\n  delete copy.output;\n  return [{ json: copy }];\n}\n\nconst itemsMain = [\n  { title: 'Soporte', value: 'Soporte' },\n  { title: 'Consultar cuenta', value: 'Consultar cuenta' },\n  { title: 'No soy cliente', value: 'No soy cliente' }\n];\nconst itemsTipo = [\n  { title: 'Cédula de ciudadanía', value: 'Cédula de ciudadanía' },\n  { title: 'Cédula de extranjería', value: 'Cédula de extranjería' },\n  { title: 'Pasaporte', value: 'Pasaporte' },\n  { title: 'NIT', value: 'NIT' }\n];\nconst itemsConfirma = [\n  { title: 'Sí', value: 'Sí' },\n  { title: 'No', value: 'No' }\n];\nconst itemsNoEncontrado = [\n  { title: 'Ir a ventas', value: 'Ir a ventas' },\n  { title: 'Volver al menú', value: 'Volver al menú' }\n];\nconst itemsSoporte = [\n  { title: 'Soporte Técnico Internet y TV', value: 'Soporte Técnico Internet y TV' },\n  { title: 'Cambiar Nombre, Contraseña de Red WiFi', value: 'Cambiar Nombre, Contraseña de Red WiFi' },\n  { title: 'PQRs', value: 'PQRs' }\n];\n\nconst welcome = numbered(\n  'Bienvenido a Buho Network SAS 🦉\\n\\nSomos tu proveedor de internet en Chía y Cajicá.\\n¿Cómo te podemos ayudar el día de hoy?\\n\\nPor favor selecciona el área con la que deseas comunicarte:',\n  itemsMain\n);\nconst tipoMenu = numbered('¿Cuál es tu tipo de documento?', itemsTipo);\nconst soporteMenu = numbered(\n  'Escoge una opción.\\nSelecciona el tipo de servicio requerido:',\n  itemsSoporte\n);\nconst ventasAsk = 'Nos alegra que nos contactes 😀\\n¿Cuál es tu nombre?';\nconst fallaText = 'Describe la falla que esté presentando tu servicio.\\nSi es posible adjunta alguna evidencia visual del problema.\\nEn un momento uno de nuestros asesores te atenderá 🦉';\nconst wifiText = 'Escribe la nueva contraseña o el nombre para tu red wifi.\\n\\nRecuerda: una contraseña fuerte tiene más de 15 caracteres, combinados entre letras y números.\\nEvita espacios en el nombre de la red: reemplázalos por - o _.\\n\\nEn un momento uno de nuestros asesores te confirmará el cambio 🦉';\nconst pqrText = 'Escribe tu petición, queja o reclamo.\\nSi tienes ayudas visuales que nos ayuden a entender el problema, adjúntalas por favor.\\nEn un momento uno de nuestros asesores te atenderá 🦉';\nconst pagosText = numbered(\n  'Puedes consultar tu saldo y realizar tu pago en buhonet.sima-app.com/pagos/portal\\nAl pagar por la página web no es necesario enviar comprobante.\\nTambién puedes pagar en efectivo y con tarjeta en nuestras oficinas en Chía y Cajicá.\\n\\n¿Tienes alguna duda relacionada con tu factura?',\n  [{ title: 'Sí', value: 'Sí' }, { title: 'No, gracias', value: 'No, gracias' }]\n);\nconst pagosSi = 'Cuéntanos tu duda sobre la factura y envíanos el número de documento del titular.';\nconst thanks = 'Gracias por comunicarte con Buho Network SAS 😀';\n\nfunction matchTipo(n) {\n  if (n === '1' || n.indexOf('ciudadan') !== -1) return { code: '13', nombre: 'Cédula de ciudadanía' };\n  if (n === '2' || n.indexOf('extranjer') !== -1) return { code: '22', nombre: 'Cédula de extranjería' };\n  if (n === '3' || n.indexOf('pasaporte') !== -1) return { code: '41', nombre: 'Pasaporte' };\n  if (n === '4' || n === 'nit') return { code: '31', nombre: 'NIT' };\n  return null;\n}\n\nfunction matchMain(n) {\n  if (n === '1' || n === 'soporte') return 'soporte';\n  if (n === '2' || n === 'consultar cuenta' || n.indexOf('consultar') !== -1) return 'cuenta';\n  if (n === '3' || n.indexOf('no soy') !== -1) return 'nuevo';\n  return '';\n}\n\nfunction matchSoporte(n) {\n  if (n === '1' || n.indexOf('1 ') === 0) return 'falla_tecnica';\n  if (n === '2' || n.indexOf('2 ') === 0) return 'cambio_wifi';\n  if (n === '3' || n.indexOf('3 ') === 0) return 'pqr';\n  if (n.indexOf('wifi') !== -1 || n.indexOf('wi fi') !== -1 || n.indexOf('contrasena') !== -1 || n.indexOf('clave') !== -1) return 'cambio_wifi';\n  if (n.indexOf('pqr') !== -1 || n.indexOf('queja') !== -1 || n.indexOf('reclamo') !== -1 || n.indexOf('peticion') !== -1) return 'pqr';\n  if (n.indexOf('soporte tecnico') !== -1 || n.indexOf('internet') !== -1 || n.indexOf(' tv') !== -1 || n === 'tv' || n === 'soporte') return 'falla_tecnica';\n  return '';\n}\n\nfunction isNo(n) {\n  return n === 'no' || n === '2' || n === 'no gracias' || n.indexOf('no ') === 0;\n}\nfunction isSi(n) {\n  return n === 'si' || n === 's' || n === '1' || n.indexOf('si ') === 0;\n}\n\nfunction startDoc(area) {\n  session.area_destino = area;\n  session.numero_documento = '';\n  session.tipo_documento = '';\n  session.tipo_documento_nombre = '';\n  session.referencias = [];\n  session.referencia = '';\n  const agent = area === 'facturacion' ? 'facturacion' : 'soporte';\n  return menuResult('doc_tipo', '', agent, tipoMenu, itemsTipo);\n}\n\nfunction ventasLead() {\n  clearIdentity();\n  return menuResult('done', 'lead', 'ventas', ventasAsk, []);\n}\n\nfunction welcomeMenu() {\n  clearIdentity();\n  return menuResult('main', '', 'soporte', welcome, itemsMain);\n}\n\nfunction confirmaText() {\n  return numbered(\n    '¿Estos datos son correctos?\\n\\nTipo: ' + session.tipo_documento_nombre + '\\nNúmero: ' + session.numero_documento,\n    itemsConfirma\n  );\n}\n\nfunction afterRef(ref) {\n  session.referencia = ref.referencia || '';\n  session.cedula = session.numero_documento || session.cedula || '';\n  session.nombre_cliente = ref.nombre || '';\n  session.referencias = [];\n  const quien = session.nombre_cliente ? ('Encontré a ' + session.nombre_cliente) : 'Encontré tu servicio';\n  const donde = [ref.direccion, ref.municipio].filter(Boolean).join(', ');\n  const linea = quien + ', referencia ' + session.referencia + (donde ? ' (' + donde + ')' : '') + '.';\n  if (session.area_destino === 'facturacion') {\n    return menuResult('done', 'factura', 'facturacion', linea + '\\n\\nCuéntame tu duda sobre la cuenta.', []);\n  }\n  return menuResult('soporte_sub', '', 'soporte', linea + '\\n\\n' + soporteMenu, itemsSoporte);\n}\n\nif (user === 'menu' || user === 'inicio') {\n  return welcomeMenu();\n}\n\nconst state = String(session.menu_state || '');\n\nif (!state) {\n  return welcomeMenu();\n}\n\nif (state === 'main') {\n  const picked = matchMain(user);\n  if (picked === 'soporte') return startDoc('soporte');\n  if (picked === 'cuenta') return startDoc('facturacion');\n  if (picked === 'nuevo') return ventasLead();\n  return welcomeMenu();\n}\n\nif (state === 'doc_tipo') {\n  const tipo = matchTipo(user);\n  if (!tipo) return menuResult('doc_tipo', session.motivo || '', session.active_agent, 'No reconocí el tipo de documento.\\n\\n' + tipoMenu, itemsTipo);\n  session.tipo_documento = tipo.code;\n  session.tipo_documento_nombre = tipo.nombre;\n  const pista = tipo.code === '41'\n    ? 'Escribe el número de tu pasaporte.'\n    : 'Escribe el número de tu ' + tipo.nombre + ', solo dígitos.';\n  return menuResult('doc_numero', session.motivo || '', session.active_agent, pista, []);\n}\n\nif (state === 'doc_numero') {\n  let numero = userRaw.replace(/\\s+/g, '');\n  if (session.tipo_documento === '41') {\n    numero = numero.toUpperCase();\n    if (!/^[A-Z0-9]{4,20}$/.test(numero)) {\n      return menuResult('doc_numero', session.motivo || '', session.active_agent, 'El pasaporte debe tener entre 4 y 20 letras o números. Escríbelo de nuevo.', []);\n    }\n  } else {\n    numero = numero.replace(/\\D/g, '');\n    if (numero.length < 5 || numero.length > 15) {\n      return menuResult('doc_numero', session.motivo || '', session.active_agent, 'El número debe tener entre 5 y 15 dígitos. Escríbelo de nuevo, sin puntos ni espacios.', []);\n    }\n  }\n  session.numero_documento = numero;\n  return menuResult('doc_confirma', session.motivo || '', session.active_agent, confirmaText(), itemsConfirma);\n}\n\nif (state === 'doc_confirma') {\n  if (isNo(user)) {\n    session.numero_documento = '';\n    session.tipo_documento = '';\n    session.tipo_documento_nombre = '';\n    return menuResult('doc_tipo', session.motivo || '', session.active_agent, 'De acuerdo, elige de nuevo el tipo de documento.\\n\\n' + tipoMenu, itemsTipo);\n  }\n  if (isSi(user)) return buscarResult();\n  return menuResult('doc_confirma', session.motivo || '', session.active_agent, confirmaText(), itemsConfirma);\n}\n\nif (state === 'no_encontrado') {\n  if (user === '1' || user.indexOf('venta') !== -1) return ventasLead();\n  if (user === '2' || user.indexOf('menu') !== -1 || user.indexOf('volver') !== -1) return welcomeMenu();\n  return menuResult('no_encontrado', '', session.active_agent, numbered('No encontramos un cliente con esos datos.\\n\\n¿Qué quieres hacer?', itemsNoEncontrado), itemsNoEncontrado);\n}\n\nif (state === 'elegir_ref') {\n  const refs = Array.isArray(session.referencias) ? session.referencias : [];\n  let picked = null;\n  const asNum = parseInt(user, 10);\n  if (String(asNum) === user && asNum >= 1 && asNum <= refs.length) picked = refs[asNum - 1];\n  if (!picked) {\n    picked = refs.filter(function (r) { return norm(r.referencia) === user; })[0] || null;\n  }\n  if (!picked) {\n    const again = refs.map(function (r, i) {\n      const donde = [r.direccion, r.municipio].filter(Boolean).join(', ');\n      return (i + 1) + '. ' + r.referencia + (donde ? ' — ' + donde : '');\n    }).join('\\n');\n    return menuResult('elegir_ref', session.motivo || '', session.active_agent, 'Elige el número de la referencia:\\n\\n' + again, refs.map(function (r) {\n      return { title: r.referencia, value: r.referencia };\n    }));\n  }\n  return afterRef(picked);\n}\n\nif (state === 'soporte_sub') {\n  const picked = matchSoporte(user);\n  if (picked === 'falla_tecnica') return menuResult('done', 'falla_tecnica', 'soporte', fallaText, []);\n  if (picked === 'cambio_wifi') return menuResult('done', 'cambio_wifi', 'soporte', wifiText, []);\n  if (picked === 'pqr') return menuResult('done', 'pqr', 'soporte', pqrText, []);\n  return agentResult('soporte');\n}\n\nif (state === 'pagos_sub') {\n  if (isNo(user)) return menuResult('', '', 'soporte', thanks, []);\n  if (isSi(user)) return menuResult('done', 'factura', 'facturacion', pagosSi, []);\n  return agentResult('facturacion', 'factura');\n}\n\nreturn agentResult();\n"
+      },
+      "id": "f80f15bb-8bdc-4fd6-b796-67ae3605d34a",
+      "name": "Router Menú",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -430,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "48575ce5-d771-44a8-befb-68ac684cb308",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "menu",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "menu"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "5b390e09-7fe3-4a1b-81e2-05c58c21d5a8",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "buscar_cliente",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "buscar"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "agente"
+        }
+      },
+      "id": "f5c0a71c-a69a-452f-ba24-997b1d1075fc",
+      "name": "Switch Ruta",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -180,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare Reply').first().json.chatwoot_base_url + '/api/v1/accounts/' + $('Prepare Reply').first().json.account_id + '/conversations/' + $('Prepare Reply').first().json.conversation_id + '/custom_attributes' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ custom_attributes: { active_agent: ($('Prepare Reply').first().json.session && $('Prepare Reply').first().json.session.active_agent) || 'soporte' } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "307fbf84-d944-49ef-be94-2428de2a4d98",
+      "name": "Sync Área Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2864,
+        1056
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "description": "Guarda el lead comercial en el contacto de Chatwoot: nombre, direccion y tipo de plan (solo internet o con TV). Llamalo cuando ya tengas los tres datos.",
+        "source": "parameter",
+        "workflowJson": "{\"name\": \"Guardar Lead Ventas\", \"nodes\": [{\"parameters\": {\"inputSource\": \"workflowInputs\", \"workflowInputs\": {\"values\": [{\"name\": \"nombre\", \"type\": \"string\"}, {\"name\": \"direccion\", \"type\": \"string\"}, {\"name\": \"tipo_plan\", \"type\": \"string\"}, {\"name\": \"contact_id\", \"type\": \"string\"}, {\"name\": \"account_id\", \"type\": \"string\"}, {\"name\": \"chatwoot_base_url\", \"type\": \"string\"}]}}, \"id\": \"a11aa11a-b22b-4c3c-8d4d-leadtrigger01\", \"name\": \"When Executed by Another Workflow\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.1, \"position\": [0, 0]}, {\"parameters\": {\"method\": \"PUT\", \"url\": \"={{ $json.chatwoot_base_url + '/api/v1/accounts/' + $json.account_id + '/contacts/' + $json.contact_id }}\", \"authentication\": \"genericCredentialType\", \"genericAuthType\": \"httpHeaderAuth\", \"sendHeaders\": true, \"headerParameters\": {\"parameters\": [{\"name\": \"Content-Type\", \"value\": \"application/json\"}]}, \"sendBody\": true, \"specifyBody\": \"json\", \"jsonBody\": \"={{ JSON.stringify({ custom_attributes: { lead_nombre: $json.nombre || '', lead_direccion: $json.direccion || '', lead_tipo_plan: $json.tipo_plan || '' } }) }}\", \"options\": {\"response\": {\"response\": {\"neverError\": true}}, \"timeout\": 15000}}, \"id\": \"b22bb22b-c33c-4d4d-9e5e-leadhttp0002\", \"name\": \"PUT Lead Contacto\", \"type\": \"n8n-nodes-base.httpRequest\", \"typeVersion\": 4.2, \"position\": [280, 0], \"credentials\": {\"httpHeaderAuth\": {\"id\": \"JhAQSwHXe9V5NqcC\", \"name\": \"API Chatwoot\"}}, \"onError\": \"continueRegularOutput\"}], \"connections\": {\"When Executed by Another Workflow\": {\"main\": [[{\"node\": \"PUT Lead Contacto\", \"type\": \"main\", \"index\": 0}]]}}, \"settings\": {\"executionOrder\": \"v1\", \"callerPolicy\": \"workflowsFromSameOwner\"}}",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "nombre": "={{ $fromAI('nombre', 'Nombre del interesado', 'string') }}",
+            "direccion": "={{ $fromAI('direccion', 'Direccion, conjunto o ubicacion donde quiere el servicio', 'string') }}",
+            "tipo_plan": "={{ $fromAI('tipo_plan', 'solo internet o internet con TV', 'string') }}",
+            "contact_id": "={{ $('Merge Session').first().json.contact_id }}",
+            "account_id": "={{ $('Merge Session').first().json.account_id }}",
+            "chatwoot_base_url": "={{ $('Merge Session').first().json.chatwoot_base_url }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "direccion",
+              "displayName": "direccion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "tipo_plan",
+              "displayName": "tipo_plan",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "contact_id",
+              "displayName": "contact_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "account_id",
+              "displayName": "account_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "chatwoot_base_url",
+              "displayName": "chatwoot_base_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "id": "496d5fb8-2547-4527-b31b-2d944d9e7896",
+      "name": "Guardar Lead Ventas",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1456,
+        1680
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://buhonet.sima-app.com/api/v1/clientes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "tipo_documento",
+              "value": "={{ $('Router Menú').first().json.session.tipo_documento }}"
+            },
+            {
+              "name": "numero_documento",
+              "value": "={{ $('Router Menú').first().json.session.numero_documento }}"
+            },
+            {
+              "name": "solo_activas",
+              "value": "1"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "2de34115-6908-40f0-a27e-0bb21c89c9d9",
+      "name": "HTTP Buscar Identidad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        1480
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0vTg2pDTdy0JK04X",
+          "name": "Token Sima"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Router Menú').first().json;\nconst session = Object.assign({}, prev.session || {});\nconst raw = $input.first().json || {};\nconst wrapped = raw && raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body) && (raw.statusCode || raw.headers);\nconst body = wrapped ? raw.body : raw;\nconst statusCode = Number(raw.statusCode || body.statusCode || 0);\n\nfunction normDoc(v) {\n  return String(v || '').replace(/[\\s.]/g, '').toUpperCase();\n}\n\nfunction rowsFrom(payload) {\n  if (!payload || typeof payload !== 'object') return null;\n  if (Array.isArray(payload)) return payload;\n  if (Array.isArray(payload.data)) return payload.data;\n  if (payload.data && typeof payload.data === 'object' && Array.isArray(payload.data.data)) return payload.data.data;\n  return null;\n}\n\nconst doc = normDoc(session.numero_documento);\nconst tipo = String(session.tipo_documento || '').trim();\n\nfunction activo(nombre) {\n  return String(nombre || '').toUpperCase().indexOf('ACTIVO') === 0;\n}\n\nfunction estadoNombre(r) {\n  if (!r || r.estado_contrato == null || r.estado_contrato === '') return '';\n  if (typeof r.estado_contrato === 'string') return r.estado_contrato;\n  return r.estado_contrato.nombre || '';\n}\n\nconst rawRows = rowsFrom(body);\nconst refs = [];\nif (rawRows) {\n  rawRows.forEach(function (r) {\n    const sus = r && r.suscriptor ? r.suscriptor : {};\n    const num = normDoc(sus.numero_documento);\n    const cod = String(sus.tipo_documento && sus.tipo_documento.codigo != null ? sus.tipo_documento.codigo : '').trim();\n    const est = estadoNombre(r);\n    if (doc && num !== doc) return;\n    if (tipo && cod && cod !== tipo) return;\n    if (est && !activo(est)) return;\n    const inm = r.inmueble || {};\n    refs.push({\n      referencia: String(r.referencia || ''),\n      direccion: String(inm.direccion || ''),\n      municipio: String(inm.municipio || ''),\n      nombre: String(sus.nombre_completo || '').trim()\n    });\n  });\n}\n\nfunction promptFor(sess) {\n  return [\n    'Mensaje del cliente:',\n    prev.user_text || '',\n    '',\n    'Sesión:',\n    JSON.stringify(sess),\n    sess.motivo ? ('Motivo elegido en menú: ' + sess.motivo) : 'Sin motivo de menú.',\n    sess.referencia ? ('Referencia elegida: ' + sess.referencia) : '',\n    prev.outage ? ('DAÑO MASIVO activo: ' + prev.outage) : 'Sin flag de daño masivo en Redis.'\n  ].filter(function (line) { return line !== ''; }).join('\\n');\n}\n\nfunction emit(reply, items) {\n  return [{\n    json: Object.assign({}, prev, {\n      session: session,\n      active_agent: session.active_agent,\n      route: 'menu',\n      output: reply,\n      menu_items: items || [],\n      text: promptFor(session)\n    })\n  }];\n}\n\nfunction detalleError() {\n  let msg = '';\n  if (body && typeof body === 'object') {\n    if (typeof body.message === 'string') msg = body.message;\n    else if (typeof body.error === 'string') msg = body.error;\n    else if (body.error && typeof body.error.message === 'string') msg = body.error.message;\n  }\n  if (!msg && raw.error) {\n    msg = typeof raw.error === 'string' ? raw.error : (raw.error.message || '');\n  }\n  return String(msg || '').replace(/\\s+/g, ' ').trim().slice(0, 160);\n}\n\nfunction consultaFallida() {\n  if (statusCode >= 400) return true;\n  if (body && body.success === false) return true;\n  if (raw.error) return true;\n  if (rawRows === null) return true;\n  return false;\n}\n\nconst itemsNo = [\n  { title: 'Ir a ventas', value: 'Ir a ventas' },\n  { title: 'Volver al menú', value: 'Volver al menú' }\n];\nconst itemsConfirma = [\n  { title: 'Sí', value: 'Sí' },\n  { title: 'No', value: 'No' }\n];\n\nif (consultaFallida()) {\n  session.menu_state = 'doc_confirma';\n  const estadoHttp = statusCode ? ('HTTP ' + statusCode) : 'sin código HTTP';\n  const det = detalleError();\n  const msg = 'No pude consultar SIMA (' + estadoHttp + (det ? ': ' + det : '') + ').\\n\\n¿Estos datos son correctos?\\n\\nTipo: ' + (session.tipo_documento_nombre || '') + '\\nNúmero: ' + (session.numero_documento || '') + '\\n\\n1. Sí\\n2. No';\n  return emit(msg, itemsConfirma);\n}\n\nif (!refs.length) {\n  session.menu_state = 'no_encontrado';\n  session.referencias = [];\n  session.referencia = '';\n  const msg = 'No encontramos un cliente con ' + (session.tipo_documento_nombre || 'ese documento') + ' ' + (session.numero_documento || doc) + '.\\n\\n¿Qué quieres hacer?\\n\\n1. Ir a ventas\\n2. Volver al menú';\n  return emit(msg, itemsNo);\n}\n\nfunction linea(r) {\n  const donde = [r.direccion, r.municipio].filter(Boolean).join(', ');\n  return r.referencia + (donde ? ' — ' + donde : '');\n}\n\nif (refs.length === 1) {\n  const ref = refs[0];\n  session.referencia = ref.referencia;\n  session.cedula = session.numero_documento || doc;\n  session.nombre_cliente = ref.nombre;\n  session.referencias = [];\n  const quien = ref.nombre ? ('Encontré a ' + ref.nombre) : 'Encontré tu servicio';\n  const donde = [ref.direccion, ref.municipio].filter(Boolean).join(', ');\n  const encabezado = quien + ', referencia ' + ref.referencia + (donde ? ' (' + donde + ')' : '') + '.';\n  if (session.area_destino === 'facturacion') {\n    session.menu_state = 'done';\n    session.motivo = 'factura';\n    session.active_agent = 'facturacion';\n    return emit(encabezado + '\\n\\nCuéntame tu duda sobre la cuenta.', []);\n  }\n  session.menu_state = 'soporte_sub';\n  session.motivo = '';\n  session.active_agent = 'soporte';\n  const submenu = 'Escoge una opción.\\nSelecciona el tipo de servicio requerido:\\n\\n1. Soporte Técnico Internet y TV\\n2. Cambiar Nombre, Contraseña de Red WiFi\\n3. PQRs';\n  return emit(encabezado + '\\n\\n' + submenu, [\n    { title: 'Soporte Técnico Internet y TV', value: 'Soporte Técnico Internet y TV' },\n    { title: 'Cambiar Nombre, Contraseña de Red WiFi', value: 'Cambiar Nombre, Contraseña de Red WiFi' },\n    { title: 'PQRs', value: 'PQRs' }\n  ]);\n}\n\nsession.menu_state = 'elegir_ref';\nsession.referencias = refs;\nsession.referencia = '';\nconst lista = refs.map(function (r, i) { return (i + 1) + '. ' + linea(r); }).join('\\n');\nreturn emit(\n  'Tienes más de un servicio activo. ¿Sobre cuál quieres hacer la petición?\\n\\n' + lista,\n  refs.map(function (r) { return { title: linea(r), value: r.referencia }; })\n);\n"
+      },
+      "id": "72f91140-6c7b-4905-8829-c115a3b800f5",
+      "name": "Interpretar identidad",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        1480
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "IF Continuar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Continuar": {
+      "main": [
+        [
+          {
+            "node": "Redis Get Seen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Get Seen": {
+      "main": [
+        [
+          {
+            "node": "IF Nuevo mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Nuevo mensaje": {
+      "main": [
+        [
+          {
+            "node": "Redis Set Seen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Set Seen": {
+      "main": [
+        [
+          {
+            "node": "Redis Get Session",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Redis Get Outage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Get Session": {
+      "main": [
+        [
+          {
+            "node": "Redis Join",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Get Outage": {
+      "main": [
+        [
+          {
+            "node": "Redis Join",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Redis Join": {
+      "main": [
+        [
+          {
+            "node": "Merge Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Session": {
+      "main": [
+        [
+          {
+            "node": "Router Menú",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Agente": {
+      "main": [
+        [
+          {
+            "node": "Agente Facturación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agente Ventas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Soporte": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Facturación": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Ventas": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Reply": {
+      "main": [
+        [
+          {
+            "node": "IF Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Set Session": {
+      "main": [
+        [
+          {
+            "node": "Sync Área Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo Soporte": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memoria Soporte": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo Facturación": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Facturación",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memoria Facturación": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente Facturación",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo Ventas": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Ventas",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memoria Ventas": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente Ventas",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SIMA Cliente Soporte": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SIMA Ordenes": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PQRS": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SmartOLT Listar OLTs": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SmartOLT Listar ONUs": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SmartOLT Buscar ONU": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SmartOLT PON": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SmartOLT Cards": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SmartOLT Temperatura": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SmartOLT ONUs LOS": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SmartOLT ONUs Offline": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SmartOLT Estado ONU": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reboot ONU": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transfer Facturación": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transfer Ventas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handoff Humano Soporte": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Identity": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Soporte",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SIMA Cliente Facturación": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Facturación",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SIMA Recibos": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Facturación",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transfer Soporte desde Facturación": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Facturación",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handoff Contabilidad": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Facturación",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SIMA Cliente Ventas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Ventas",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transfer Soporte desde Ventas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Ventas",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handoff Ventas Humano": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Ventas",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Handoff": {
+      "main": [
+        [
+          {
+            "node": "HTTP Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Redis Set Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Handoff": {
+      "main": [
+        [
+          {
+            "node": "Redis Set Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router Menú": {
+      "main": [
+        [
+          {
+            "node": "Switch Ruta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Ruta": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Buscar Identidad",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch Agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Área Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Enviar a Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Lead Ventas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente Ventas",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Buscar Identidad": {
+      "main": [
+        [
+          {
+            "node": "Interpretar identidad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar identidad": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "3594de35-d02b-4a24-bce2-1d16eff31c49",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f945fadfd614e243648a4bdb183019714ef54181f040e484997c7576f5bd4851"
+  },
+  "nodeGroups": [],
+  "id": "olqCI2nvHEEoeoPc",
+  "tags": []
+}
