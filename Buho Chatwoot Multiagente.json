@@ -405,8 +405,9 @@
         "promptType": "define",
         "text": "={{ $json.text }}",
         "options": {
-          "systemMessage": "Eres el agente de Soporte de Búho Net (ISP). Eres el punto de entrada de TODO chat. Hablas español, claro y breve.\n\nIdentidad:\n- Si no hay cédula ni referencia en el contexto de sesión, pídelas (cédula colombiana o código tipo MED0142).\n- Llama sima_cliente y luego save_identity con los datos encontrados.\n- No inventes IDs, SN, saldos ni estados. Si una tool falla o viene vacía, dilo.\n\nInventario SmartOLT (piloto): puedes listar OLTs, ONUs, LOS, offline, PON, tarjetas, temperatura, buscar por SN y ver estado de ONU. Resume en texto; NUNCA pegues JSON crudo.\n\nLímites:\n- Recibos, saldo, factura: NO los resuelvas. Llama transfer_facturacion y dile al cliente que el siguiente mensaje lo atiende Facturación.\n- Plan nuevo, mudanza, ventas: llama transfer_ventas igual.\n- Pedir un asesor humano: llama handoff_humano.\n- ONU del cliente (tool ONU por Cédula): si la sesión trae cédula, úsala. Si no, pídela. Resume en texto, sin JSON. Si no hay ONU, dilo. Si hay varias, lístalas y no reinicies.\n- Reinicio: solo con un sí claro del cliente, llama ONU por Cédula con reboot verdadero. Solo se reinicia si hay exactamente una ONU. Di que tardará 1-2 minutos en reconectar. No llames reboot_onu ni digas que reiniciaste si la tool no lo confirmó.\n- Si el contexto trae daño masivo, infórmalo ANTES de diagnosticar o sugerir reboot.\n\nConfirmaciones: no ejecutes acciones destructivas sin un \"sí\" claro del cliente.\nMáximo 2-3 preguntas por turno.\n\nMenú (si el mensaje trae \"Motivo elegido en menú\"):\n- falla_tecnica: ya le pedimos el documento y la descripción de la falla. Si falta la cédula, pídela. Consulta SIMA y SmartOLT y resume en texto. Si no lo resuelves, llama handoff_humano.\n- cambio_wifi: pide la cédula y el nombre o la contraseña nuevos. El nombre de la red no lleva espacios (usa - o _). La contraseña debe tener más de 15 caracteres, letras y números. No hay API para cambiar el WiFi: cuando tengas los datos llama siempre handoff_humano. Nunca digas que ya cambiaste la red.\n- pqr: pide la cédula, consulta PQRS, toma la descripción y llama handoff_humano.\n\nSi la sesión ya trae referencia y cédula, el cliente está identificado. No vuelvas a pedir el documento ni la referencia. Úsalos en SIMA y en las demás tools.",
-          "maxIterations": 8
+          "systemMessage": "Eres el agente de Soporte de Búho Net (ISP). Eres el punto de entrada de TODO chat. Hablas español, claro y breve.\n\nIdentidad:\n- Si no hay cédula ni referencia en el contexto de sesión, pídelas (cédula colombiana o código tipo MED0142).\n- Llama sima_cliente y luego save_identity con los datos encontrados.\n- No inventes IDs, SN, saldos ni estados. Si una tool falla o viene vacía, dilo.\n\nInventario SmartOLT (piloto): puedes listar OLTs, ONUs, LOS, offline, PON, tarjetas, temperatura, buscar por SN y ver estado de ONU. Resume en texto; NUNCA pegues JSON crudo.\n\nLímites:\n- Recibos, saldo, factura: NO los resuelvas. Llama transfer_facturacion y dile al cliente que el siguiente mensaje lo atiende Facturación.\n- Plan nuevo, mudanza, ventas: llama transfer_ventas igual.\n- Pedir un asesor humano: llama handoff_humano.\n- ONU del cliente (tool ONU por Cédula): si la sesión trae cédula, úsala. Si no, pídela y no llames la tool. En query manda JSON {\"cedula\":\"\",\"reboot\":false}. reboot true solo con un sí claro.\n- Al llamar la tool no describas equipos ni digas que reiniciaste: ese texto lo escribe el flujo. Ninguna ONU, una (y el reinicio si hubo un sí y hay una sola) o varias (las lista y no reinicia). No llames reboot_onu.\n- Si el contexto trae daño masivo, infórmalo ANTES de diagnosticar o sugerir reboot.\n\nConfirmaciones: no ejecutes acciones destructivas sin un \"sí\" claro del cliente.\nMáximo 2-3 preguntas por turno.\n\nMenú (si el mensaje trae \"Motivo elegido en menú\"):\n- falla_tecnica: ya le pedimos el documento y la descripción de la falla. Si falta la cédula, pídela. Consulta SIMA y SmartOLT y resume en texto. Si no lo resuelves, llama handoff_humano.\n- cambio_wifi: pide la cédula y el nombre o la contraseña nuevos. El nombre de la red no lleva espacios (usa - o _). La contraseña debe tener más de 15 caracteres, letras y números. No hay API para cambiar el WiFi: cuando tengas los datos llama siempre handoff_humano. Nunca digas que ya cambiaste la red.\n- pqr: pide la cédula, consulta PQRS, toma la descripción y llama handoff_humano.\n\nSi la sesión ya trae referencia y cédula, el cliente está identificado. No vuelvas a pedir el documento ni la referencia. Úsalos en SIMA y en las demás tools.",
+          "maxIterations": 8,
+          "returnIntermediateSteps": true
         }
       },
       "id": "a7537dac-9217-4059-84d1-82283804eb51",
@@ -535,7 +536,7 @@
         "promptType": "define",
         "text": "={{ $json.text }}",
         "options": {
-          "systemMessage": "Eres el agente comercial de Búho Net. Tono natural, no robots ni menús largos.\n\nSIMA (tool SIMA Cliente Ventas):\n- Solo cédula (dígitos) o código de contrato tipo MED0142.\n- Sirve para ver el plan/contrato ACTUAL del cliente.\n- El parámetro search NUNCA es ciudad, zona ni municipio (ej. Chía). Eso no es referencia SIMA.\n- No hay API de cobertura por ciudad. No inventes tarifas que no estén en las fotos de planes.\n\nSi preguntan si hay cobertura en una zona y SIMA no trae ese dato: dilo claro. No digas error técnico por falta de tarifa de zona. Los planes y los precios se envían con Enviar Fotos Planes.\n\nFallas técnicas o PQR: transfer_soporte.\nSi pide un asesor comercial humano: handoff_ventas_humano.\nEspañol conversacional y breve. Sin JSON crudo.\n\nSi el mensaje trae \"Motivo elegido en menú: lead\":\n- El menú ya preguntó el nombre. Pide de a una sola cosa lo que falte: nombre, dirección o conjunto, y si quiere solo internet o con TV.\n- Cuando tengas los tres, llama la tool Guardar Lead Ventas y después handoff_ventas_humano.\n\nFotos de planes (tool Enviar Fotos Planes):\n- Si piden planes, precios o la oferta, llama Enviar Fotos Planes una sola vez. Las fotos se envían solas al chat.\n- No la vuelvas a llamar salvo que el cliente lo pida.\n- No inventes tarifas que no estén en esas fotos.\n- Si quieren contratar, sigue pidiendo los datos del lead y luego handoff_ventas_humano.",
+          "systemMessage": "Eres el agente comercial de Búho Net. Tono natural, no robots ni menús largos.\n\nSIMA (tool SIMA Cliente Ventas):\n- Solo cédula (dígitos) o código de contrato tipo MED0142.\n- Sirve para ver el plan/contrato ACTUAL del cliente.\n- El parámetro search NUNCA es ciudad, zona ni municipio (ej. Chía). Eso no es referencia SIMA.\n- No hay API de cobertura por ciudad. No inventes tarifas que no estén en las fotos de planes.\n\nSi preguntan si hay cobertura en una zona y SIMA no trae ese dato: dilo claro. No digas error técnico por falta de tarifa de zona. Los planes y los precios se envían con Enviar Fotos Planes.\n\nFallas técnicas o PQR: transfer_soporte.\nSi pide un asesor comercial humano: handoff_ventas_humano.\nEspañol conversacional y breve. Sin JSON crudo.\n\nSi el mensaje trae \"Motivo elegido en menú: lead\":\n- El menú ya preguntó el nombre. Pide de a una sola cosa lo que falte: nombre, dirección o conjunto, y si quiere solo internet o con TV.\n- Cuando tengas los tres, llama la tool Guardar Lead Ventas y después handoff_ventas_humano.\n\nFotos de planes (tool Enviar Fotos Planes):\n- Si piden planes, precios o la oferta, llama Enviar Fotos Planes una sola vez. El flujo envía las fotos en este turno.\n- No la vuelvas a llamar salvo que el cliente lo pida.\n- No inventes tarifas que no estén en esas fotos.\n- Si quieren contratar, sigue pidiendo los datos del lead y luego handoff_ventas_humano.",
           "maxIterations": 8
         }
       },
@@ -1237,7 +1238,7 @@
     },
     {
       "parameters": {
-        "jsCode": "let prev = $('Router Menú').first().json;\ntry { if ($('Interpretar identidad').isExecuted) prev = $('Interpretar identidad').first().json; } catch (e) {}\ntry { if ($('Armar factura').isExecuted) prev = $('Armar factura').first().json; } catch (e) {}\nconst out = $input.first().json;\nlet reply = String(out.output !== undefined ? out.output : (out.text || '')).trim();\nif (!reply) reply = 'No pude generar una respuesta. Intenta de nuevo en un momento.';\nif (reply.length > 4000) reply = reply.slice(0, 3900) + '\\n…';\n\nconst session = Object.assign({}, prev.session || {});\n\nfunction ran(name) {\n  try { return $(name).isExecuted; } catch (e) { return false; }\n}\n\nfunction collectToolNames(obj, acc, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 8) return;\n  if (Array.isArray(obj)) {\n    obj.forEach((x) => collectToolNames(x, acc, depth + 1));\n    return;\n  }\n  for (const [k, v] of Object.entries(obj)) {\n    if ((k === 'tool' || k === 'toolName' || k === 'name') && typeof v === 'string') acc.push(v);\n    if (k === 'action' && v && typeof v === 'object' && typeof v.tool === 'string') acc.push(v.tool);\n    if (v && typeof v === 'object') collectToolNames(v, acc, depth + 1);\n  }\n}\n\nif (ran('Transfer Ventas')) session.active_agent = 'ventas';\nelse if (ran('Transfer Facturación')) session.active_agent = 'facturacion';\nelse if (ran('Transfer Soporte desde Facturación') || ran('Transfer Soporte desde Ventas')) session.active_agent = 'soporte';\nelse {\n  const names = [];\n  collectToolNames(out.intermediateSteps || out.intermediate_steps || [], names, 0);\n  const blob = names.join(' | ').toLowerCase();\n  if (/\\btransfer ventas\\b/.test(blob)) session.active_agent = 'ventas';\n  else if (/transfer factur/.test(blob)) session.active_agent = 'facturacion';\n  else if (/transfer soporte/.test(blob)) session.active_agent = 'soporte';\n}\n\nlet handoff_team = '';\nif (ran('Handoff Ventas Humano')) handoff_team = 'ventas';\nelse if (ran('Handoff Contabilidad')) handoff_team = 'contabilidad';\nelse if (ran('Handoff Humano Soporte')) handoff_team = 'soporte';\nelse {\n  const names = [];\n  collectToolNames(out.intermediateSteps || out.intermediate_steps || [], names, 0);\n  const blob = names.join(' | ').toLowerCase();\n  if (/handoff ventas/.test(blob) || /\\bhandoff:[\"']?ventas/.test(blob)) handoff_team = 'ventas';\n  else if (/handoff contabilidad/.test(blob)) handoff_team = 'contabilidad';\n  else if (/handoff humano soporte/.test(blob)) handoff_team = 'soporte';\n}\n\nlet cfg = {};\ntry { cfg = $('Config').first().json || {}; } catch (e) {}\nlet norm = {};\ntry { norm = $('Normalize').first().json || {}; } catch (e) {}\n\nconst teamMap = {\n  ventas: Number(cfg.team_id_ventas || prev.team_id_ventas || 0),\n  contabilidad: Number(cfg.team_id_contabilidad || prev.team_id_contabilidad || 0),\n  soporte: Number(cfg.team_id_soporte || prev.team_id_soporte || 0)\n};\nconst handoff_team_id = handoff_team ? (teamMap[handoff_team] || 0) : 0;\n\nconst menu_items = Array.isArray(prev.menu_items) ? prev.menu_items : [];\nconst use_buttons = menu_items.length > 0 && cfg.menu_botones !== false && cfg.menu_botones !== 0 && String(cfg.menu_botones) !== 'false';\n\nreturn [{\n  json: {\n    reply,\n    account_id: prev.account_id || norm.account_id,\n    conversation_id: prev.conversation_id || norm.conversation_id,\n    contact_id: prev.contact_id || norm.contact_id,\n    chatwoot_base_url: prev.chatwoot_base_url || cfg.chatwoot_base_url,\n    redis_session_key: prev.redis_session_key || norm.redis_session_key,\n    session_json: JSON.stringify(session),\n    session,\n    handoff_team,\n    handoff_team_id,\n    menu_items,\n    use_buttons\n  }\n}];\n"
+        "jsCode": "let prev = $('Router Menú').first().json;\ntry { if ($('Interpretar identidad').isExecuted) prev = $('Interpretar identidad').first().json; } catch (e) {}\ntry { if ($('Armar factura').isExecuted) prev = $('Armar factura').first().json; } catch (e) {}\nconst out = $input.first().json;\nlet reply = String(out.output !== undefined ? out.output : (out.text || '')).trim();\ntry {\n  if ($('Respuesta Reinicio').isExecuted) {\n    const onuMsg = $('Respuesta Reinicio').first().json || {};\n    if (onuMsg.output) reply = String(onuMsg.output).trim();\n  } else if ($('Respuesta Búsqueda').isExecuted) {\n    const onuMsg = $('Respuesta Búsqueda').first().json || {};\n    if (onuMsg.output) reply = String(onuMsg.output).trim();\n  }\n} catch (e) {}\nif (!reply) reply = 'No pude generar una respuesta. Intenta de nuevo en un momento.';\nif (reply.length > 4000) reply = reply.slice(0, 3900) + '\\n…';\n\nconst session = Object.assign({}, prev.session || {});\n\nfunction ran(name) {\n  try { return $(name).isExecuted; } catch (e) { return false; }\n}\n\nfunction collectToolNames(obj, acc, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 8) return;\n  if (Array.isArray(obj)) {\n    obj.forEach((x) => collectToolNames(x, acc, depth + 1));\n    return;\n  }\n  for (const [k, v] of Object.entries(obj)) {\n    if ((k === 'tool' || k === 'toolName' || k === 'name') && typeof v === 'string') acc.push(v);\n    if (k === 'action' && v && typeof v === 'object' && typeof v.tool === 'string') acc.push(v.tool);\n    if (v && typeof v === 'object') collectToolNames(v, acc, depth + 1);\n  }\n}\n\nif (ran('Transfer Ventas')) session.active_agent = 'ventas';\nelse if (ran('Transfer Facturación')) session.active_agent = 'facturacion';\nelse if (ran('Transfer Soporte desde Facturación') || ran('Transfer Soporte desde Ventas')) session.active_agent = 'soporte';\nelse {\n  const names = [];\n  collectToolNames(out.intermediateSteps || out.intermediate_steps || [], names, 0);\n  const blob = names.join(' | ').toLowerCase();\n  if (/\\btransfer ventas\\b/.test(blob)) session.active_agent = 'ventas';\n  else if (/transfer factur/.test(blob)) session.active_agent = 'facturacion';\n  else if (/transfer soporte/.test(blob)) session.active_agent = 'soporte';\n}\n\nlet handoff_team = '';\nif (ran('Handoff Ventas Humano')) handoff_team = 'ventas';\nelse if (ran('Handoff Contabilidad')) handoff_team = 'contabilidad';\nelse if (ran('Handoff Humano Soporte')) handoff_team = 'soporte';\nelse {\n  const names = [];\n  collectToolNames(out.intermediateSteps || out.intermediate_steps || [], names, 0);\n  const blob = names.join(' | ').toLowerCase();\n  if (/handoff ventas/.test(blob) || /\\bhandoff:[\"']?ventas/.test(blob)) handoff_team = 'ventas';\n  else if (/handoff contabilidad/.test(blob)) handoff_team = 'contabilidad';\n  else if (/handoff humano soporte/.test(blob)) handoff_team = 'soporte';\n}\n\nlet cfg = {};\ntry { cfg = $('Config').first().json || {}; } catch (e) {}\nlet norm = {};\ntry { norm = $('Normalize').first().json || {}; } catch (e) {}\n\nconst teamMap = {\n  ventas: Number(cfg.team_id_ventas || prev.team_id_ventas || 0),\n  contabilidad: Number(cfg.team_id_contabilidad || prev.team_id_contabilidad || 0),\n  soporte: Number(cfg.team_id_soporte || prev.team_id_soporte || 0)\n};\nconst handoff_team_id = handoff_team ? (teamMap[handoff_team] || 0) : 0;\n\nconst menu_items = Array.isArray(prev.menu_items) ? prev.menu_items : [];\nconst use_buttons = menu_items.length > 0 && cfg.menu_botones !== false && cfg.menu_botones !== 0 && String(cfg.menu_botones) !== 'false';\n\nreturn [{\n  json: {\n    reply,\n    account_id: prev.account_id || norm.account_id,\n    conversation_id: prev.conversation_id || norm.conversation_id,\n    contact_id: prev.contact_id || norm.contact_id,\n    chatwoot_base_url: prev.chatwoot_base_url || cfg.chatwoot_base_url,\n    redis_session_key: prev.redis_session_key || norm.redis_session_key,\n    session_json: JSON.stringify(session),\n    session,\n    handoff_team,\n    handoff_team_id,\n    menu_items,\n    use_buttons\n  }\n}];\n"
       },
       "id": "5f4287b2-3064-4ee8-9fd1-73a3c4f066c1",
       "name": "Prepare Reply",
@@ -1731,54 +1732,13 @@
     },
     {
       "parameters": {
-        "description": "Envia al chat las dos fotos de los planes. Llamala cuando pidan planes, precios o la oferta. No la repitas salvo que el cliente lo pida.",
-        "source": "parameter",
-        "workflowJson": "{\"name\": \"Enviar Fotos Planes (sub)\", \"nodes\": [{\"parameters\": {\"inputSource\": \"workflowInputs\", \"workflowInputs\": {\"values\": [{\"name\": \"chatwoot_base_url\", \"type\": \"string\"}, {\"name\": \"account_id\", \"type\": \"string\"}, {\"name\": \"conversation_id\", \"type\": \"string\"}]}}, \"id\": \"977880bb-cb21-41e2-b0ee-7a12be09bd09\", \"name\": \"Datos de Entrada\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.2, \"position\": [-2272, 2144]}, {\"parameters\": {\"url\": \"https://drive.google.com/uc?export=download&id=1gC1bRs9RxVmD1qd8_jjDuDKHjYfRXIEE\", \"options\": {\"response\": {\"response\": {\"responseFormat\": \"file\", \"outputPropertyName\": \"foto1\"}}, \"timeout\": 20000}}, \"id\": \"e3ea91ae-efd8-4bb3-b207-44b5b17250f6\", \"name\": \"Descargar Foto 1\", \"type\": \"n8n-nodes-base.httpRequest\", \"typeVersion\": 4.5, \"position\": [-2048, 2048]}, {\"parameters\": {\"mode\": \"combine\", \"combineBy\": \"combineByPosition\", \"options\": {}}, \"id\": \"6d419935-8ae1-414a-8c34-aba8cde1245e\", \"name\": \"Combinar Fotos\", \"type\": \"n8n-nodes-base.merge\", \"typeVersion\": 3, \"position\": [-1824, 2144]}, {\"parameters\": {\"url\": \"https://drive.google.com/uc?export=download&id=19gRogWbND-CS5kez3Rs5IIqnSezkHbzs\", \"options\": {\"response\": {\"response\": {\"responseFormat\": \"file\", \"outputPropertyName\": \"foto2\"}}, \"timeout\": 20000}}, \"id\": \"3a02c1b7-9533-4799-bee7-86d142bcacfd\", \"name\": \"Descargar Foto 2\", \"type\": \"n8n-nodes-base.httpRequest\", \"typeVersion\": 4.5, \"position\": [-2048, 2240]}, {\"parameters\": {\"method\": \"POST\", \"url\": \"={{ $('Datos de Entrada').item.json.chatwoot_base_url + '/api/v1/accounts/' + $('Datos de Entrada').item.json.account_id + '/conversations/' + $('Datos de Entrada').item.json.conversation_id + '/messages' }}\", \"authentication\": \"genericCredentialType\", \"genericAuthType\": \"httpHeaderAuth\", \"sendBody\": true, \"contentType\": \"multipart-form-data\", \"bodyParameters\": {\"parameters\": [{\"name\": \"content\", \"value\": \"Estos son nuestros planes 📸\"}, {\"name\": \"message_type\", \"value\": \"outgoing\"}, {\"parameterType\": \"formBinaryData\", \"name\": \"attachments[]\", \"inputDataFieldName\": \"foto1\"}, {\"parameterType\": \"formBinaryData\", \"name\": \"attachments[]\", \"inputDataFieldName\": \"foto2\"}]}, \"options\": {\"response\": {\"response\": {\"neverError\": true}}, \"timeout\": 20000}}, \"id\": \"6b5c85c9-4127-44c3-916d-e014e7a0f231\", \"name\": \"Enviar Fotos a Chatwoot\", \"type\": \"n8n-nodes-base.httpRequest\", \"typeVersion\": 4.5, \"position\": [-1600, 2144], \"credentials\": {\"httpHeaderAuth\": {\"id\": \"JhAQSwHXe9V5NqcC\", \"name\": \"API Chatwoot\"}}}, {\"parameters\": {\"jsCode\": \"const r = $input.first().json || {};\\nconst ok = !!r.id || r.message_type === 'outgoing';\\nreturn [{ json: {\\n  result: ok ? 'fotos_enviadas' : 'error',\\n  message: ok\\n    ? 'Las 2 fotos de los planes se enviaron al cliente por el chat. No repitas el envío salvo que el cliente lo pida.'\\n    : 'No se pudieron enviar las fotos. Respuesta de Chatwoot: ' + JSON.stringify(r)\\n} }];\"}, \"id\": \"462afb73-765e-4a12-9b8e-7828aa2e5a42\", \"name\": \"Respuesta\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [-1376, 2144]}], \"connections\": {\"Datos de Entrada\": {\"main\": [[{\"node\": \"Descargar Foto 1\", \"type\": \"main\", \"index\": 0}, {\"node\": \"Descargar Foto 2\", \"type\": \"main\", \"index\": 0}]]}, \"Descargar Foto 1\": {\"main\": [[{\"node\": \"Combinar Fotos\", \"type\": \"main\", \"index\": 0}]]}, \"Combinar Fotos\": {\"main\": [[{\"node\": \"Enviar Fotos a Chatwoot\", \"type\": \"main\", \"index\": 0}]]}, \"Descargar Foto 2\": {\"main\": [[{\"node\": \"Combinar Fotos\", \"type\": \"main\", \"index\": 1}]]}, \"Enviar Fotos a Chatwoot\": {\"main\": [[{\"node\": \"Respuesta\", \"type\": \"main\", \"index\": 0}]]}}, \"settings\": {\"executionOrder\": \"v1\", \"callerPolicy\": \"workflowsFromSameOwner\", \"binaryMode\": \"separate\"}}",
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "chatwoot_base_url": "={{ $('Merge Session').first().json.chatwoot_base_url }}",
-            "account_id": "={{ $('Merge Session').first().json.account_id }}",
-            "conversation_id": "={{ $('Merge Session').first().json.conversation_id }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "chatwoot_base_url",
-              "displayName": "chatwoot_base_url",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "canBeUsedToMatch": true,
-              "type": "string"
-            },
-            {
-              "id": "account_id",
-              "displayName": "account_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "canBeUsedToMatch": true,
-              "type": "string"
-            },
-            {
-              "id": "conversation_id",
-              "displayName": "conversation_id",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "canBeUsedToMatch": true,
-              "type": "string"
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        }
+        "description": "Avisa que hay que enviar las fotos de los planes. No descarga nada. Llamala una sola vez cuando pidan planes, precios o la oferta.",
+        "jsCode": "return JSON.stringify({\n  ok: true,\n  enviar: true,\n  message: 'Las fotos se envían en este turno. No inventes tarifas. No vuelvas a llamar esta tool salvo que el cliente lo pida.'\n});"
       },
-      "id": "a7f3c1d2-4e58-4b0a-9c11-fotosplanes01",
+      "id": "c1d2e3f4-a5b6-4789-8abc-fotos-tool0001",
       "name": "Enviar Fotos Planes",
-      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
-      "typeVersion": 2.2,
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
       "position": [
         1680,
         1680
@@ -1786,57 +1746,404 @@
     },
     {
       "parameters": {
-        "description": "Busca las ONU de SmartOLT por la cedula del cliente. reboot true solo si pidio reiniciar y hay una sola ONU. Resume el message en texto, sin JSON.",
-        "source": "parameter",
-        "workflowJson": "{\"name\": \"SmartOLT ONU por Cédula (sub)\", \"nodes\": [{\"parameters\": {\"inputSource\": \"workflowInputs\", \"workflowInputs\": {\"values\": [{\"name\": \"cedula_sesion\", \"type\": \"string\"}, {\"name\": \"cedula\", \"type\": \"string\"}, {\"name\": \"reboot\", \"type\": \"boolean\"}]}}, \"id\": \"a95217f7-d00c-4544-83a4-5fceeda4ea61\", \"name\": \"Datos de Entrada\", \"type\": \"n8n-nodes-base.executeWorkflowTrigger\", \"typeVersion\": 1.2, \"position\": [-896, 96]}, {\"parameters\": {\"url\": \"https://buho-net.smartolt.com/api/onu/get_all_onus_details\", \"sendQuery\": true, \"queryParameters\": {\"parameters\": [{\"name\": \"page\", \"value\": \"1\"}, {\"name\": \"page_size\", \"value\": \"1000\"}]}, \"sendHeaders\": true, \"headerParameters\": {\"parameters\": [{\"name\": \"Accept\", \"value\": \"application/json\"}]}, \"options\": {\"timeout\": 20000}, \"authentication\": \"genericCredentialType\", \"genericAuthType\": \"httpHeaderAuth\"}, \"id\": \"cc98679f-0365-4b7e-871a-bc940987a9f5\", \"name\": \"Obtener ONUs\", \"type\": \"n8n-nodes-base.httpRequest\", \"typeVersion\": 4.5, \"position\": [-672, 96], \"credentials\": {\"httpHeaderAuth\": {\"id\": \"hOKwxJDjN8mGNvfv\", \"name\": \"token Smarth Olt\"}}}, {\"parameters\": {\"jsCode\": \"const t = $('Datos de Entrada').first().json;\\nconst sesion = String(t.cedula_sesion || '').trim();\\nconst modelo = String(t.cedula || '').trim();\\nconst cedula = (sesion || modelo).toLowerCase();\\nconst reboot = t.reboot === true || t.reboot === 'true';\\nconst items = $input.all().map(i => i.json || {});\\nlet onus = [];\\nfor (const resp of items) {\\n  if (Array.isArray(resp.onus)) onus = onus.concat(resp.onus);\\n  else if (Array.isArray(resp)) onus = onus.concat(resp);\\n  else if (resp && resp.unique_external_id) onus.push(resp);\\n}\\n\\nconst matches = onus\\n  .filter(o =>\\n    String(o.name || '').toLowerCase().includes(cedula) ||\\n    String(o.contact || '').toLowerCase().includes(cedula)\\n  )\\n  .map(o => ({\\n    name: o.name || '',\\n    unique_external_id: o.unique_external_id || '',\\n    sn: o.sn || '',\\n    olt_name: o.olt_name || '',\\n    status: o.status || o.onu_status || ''\\n  }));\\n\\nconst single = reboot && matches.length === 1;\\n\\nreturn [{ json: {\\n  cedula: sesion || modelo,\\n  reboot_requested: reboot,\\n  count: matches.length,\\n  matches,\\n  do_reboot: single,\\n  reboot_onu_id: single ? matches[0].unique_external_id : ''\\n} }];\"}, \"id\": \"0cfa176c-5ee9-46f7-be78-87d7354960c7\", \"name\": \"Filtrar por Cédula\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [-448, 96]}, {\"parameters\": {\"conditions\": {\"options\": {\"caseSensitive\": true, \"leftValue\": \"\", \"typeValidation\": \"strict\", \"version\": 2}, \"conditions\": [{\"id\": \"do-reboot\", \"leftValue\": \"={{ $json.do_reboot }}\", \"rightValue\": true, \"operator\": {\"type\": \"boolean\", \"operation\": \"equals\"}}], \"combinator\": \"and\"}, \"options\": {}}, \"id\": \"fe16d15a-7d65-4ab2-a8e2-6aacff7fd684\", \"name\": \"¿Reiniciar?\", \"type\": \"n8n-nodes-base.if\", \"typeVersion\": 2.2, \"position\": [-224, 96]}, {\"parameters\": {\"method\": \"POST\", \"url\": \"=https://buho-net.smartolt.com/api/onu/reboot/{{ $json.reboot_onu_id }}\", \"sendHeaders\": true, \"headerParameters\": {\"parameters\": [{\"name\": \"Accept\", \"value\": \"application/json\"}]}, \"options\": {\"response\": {\"response\": {\"neverError\": true}}, \"timeout\": 20000}, \"authentication\": \"genericCredentialType\", \"genericAuthType\": \"httpHeaderAuth\"}, \"id\": \"495c9dde-aec5-4260-906d-750786989db5\", \"name\": \"Reiniciar ONU\", \"type\": \"n8n-nodes-base.httpRequest\", \"typeVersion\": 4.5, \"position\": [0, 0], \"credentials\": {\"httpHeaderAuth\": {\"id\": \"hOKwxJDjN8mGNvfv\", \"name\": \"token Smarth Olt\"}}}, {\"parameters\": {\"jsCode\": \"const f = $('Filtrar por Cédula').first().json;\\nconst r = $input.first().json || {};\\nconst ok = r.status === true || r.status === 'true' || !!r.response || !!r.message;\\nconst onu = (f.matches && f.matches[0]) || {};\\n\\nreturn [{ json: {\\n  result: ok ? 'reiniciada' : 'error',\\n  onu,\\n  message: ok\\n    ? 'Se envió el comando de reinicio a la ONU de ' + (onu.name || '') + ' (ID externo ' + (onu.unique_external_id || '') + ', SN ' + (onu.sn || '') + '). El equipo tardará 1-2 minutos en reconectar.'\\n    : 'No se pudo reiniciar la ONU. Respuesta de SmartOLT: ' + JSON.stringify(r)\\n} }];\"}, \"id\": \"98f4141e-151a-485e-87a2-4d21561f25cf\", \"name\": \"Respuesta Reinicio\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [224, 0]}, {\"parameters\": {\"jsCode\": \"const f = $json;\\nlet message;\\n\\nif (f.count === 0) {\\n  message = 'No se encontraron ONUs asociadas a la cédula ' + f.cedula + '.';\\n} else if (f.reboot_requested && f.count > 1) {\\n  const list = f.matches.map((o, i) => (i + 1) + '. ' + o.name + ' — ID externo ' + o.unique_external_id + ' — SN ' + o.sn).join('\\\\n');\\n  message = 'Se encontraron ' + f.count + ' ONUs para la cédula ' + f.cedula + '. No se reinicia cuando hay más de una. Lista los equipos y pregunta cuál es, sin llamar a reboot_onu.\\\\n' + list;\\n} else {\\n  const list = f.matches.map((o, i) => (i + 1) + '. ' + o.name + ' — ID externo ' + o.unique_external_id + ' — SN ' + o.sn + ' — OLT ' + o.olt_name + ' — estado ' + o.status).join('\\\\n');\\n  message = 'Se encontraron ' + f.count + ' ONU(s) para la cédula ' + f.cedula + ':\\\\n' + list;\\n}\\n\\nreturn [{ json: { count: f.count, matches: f.matches, message } }];\"}, \"id\": \"48563f62-36f4-40e2-b427-75b300e5ed0d\", \"name\": \"Respuesta Búsqueda\", \"type\": \"n8n-nodes-base.code\", \"typeVersion\": 2, \"position\": [0, 192]}], \"connections\": {\"Datos de Entrada\": {\"main\": [[{\"node\": \"Obtener ONUs\", \"type\": \"main\", \"index\": 0}]]}, \"Obtener ONUs\": {\"main\": [[{\"node\": \"Filtrar por Cédula\", \"type\": \"main\", \"index\": 0}]]}, \"Filtrar por Cédula\": {\"main\": [[{\"node\": \"¿Reiniciar?\", \"type\": \"main\", \"index\": 0}]]}, \"¿Reiniciar?\": {\"main\": [[{\"node\": \"Reiniciar ONU\", \"type\": \"main\", \"index\": 0}], [{\"node\": \"Respuesta Búsqueda\", \"type\": \"main\", \"index\": 0}]]}, \"Reiniciar ONU\": {\"main\": [[{\"node\": \"Respuesta Reinicio\", \"type\": \"main\", \"index\": 0}]]}}, \"settings\": {\"executionOrder\": \"v1\", \"callerPolicy\": \"workflowsFromSameOwner\", \"binaryMode\": \"separate\"}}",
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "cedula_sesion": "={{ $('Merge Session').first().json.session.cedula || '' }}",
-            "cedula": "={{ $fromAI('cedula', 'Cedula del cliente solo si la sesion no trae cedula. Vacio si ya esta identificada.', 'string') }}",
-            "reboot": "={{ $fromAI('reboot', 'true solo si el cliente pidio reiniciar la ONU con un si claro. Si no, false.', 'boolean') }}"
-          },
-          "matchingColumns": [],
-          "schema": [
-            {
-              "id": "cedula_sesion",
-              "displayName": "cedula_sesion",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "canBeUsedToMatch": true,
-              "type": "string"
-            },
-            {
-              "id": "cedula",
-              "displayName": "cedula",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "canBeUsedToMatch": true,
-              "type": "string"
-            },
-            {
-              "id": "reboot",
-              "displayName": "reboot",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "canBeUsedToMatch": true,
-              "type": "boolean"
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        }
+        "description": "Pide la consulta de ONU por cedula. query es JSON {\"cedula\":\"digitos o vacio si ya esta en la sesion\",\"reboot\":false}. reboot true solo con un si claro del cliente. No consulta SmartOLT: el flujo lo hace despues.",
+        "jsCode": "let sesion = '';\ntry { sesion = String($('Merge Session').first().json.session.cedula || '').trim(); } catch (e) {}\nlet body = {};\nconst raw = (typeof query === 'undefined') ? '' : query;\nif (raw && typeof raw === 'object') body = raw;\nelse {\n  const text = String(raw || '').trim();\n  try { body = JSON.parse(text); } catch (e) { body = { cedula: text }; }\n}\nconst cedula = sesion || String(body.cedula || '').trim();\nconst reboot = body.reboot === true || String(body.reboot).toLowerCase() === 'true';\nif (!cedula) {\n  return JSON.stringify({\n    ok: false,\n    cedula: '',\n    reboot: false,\n    message: 'Falta la cédula. Pídela. No inventes equipos ni digas que reiniciaste.'\n  });\n}\nreturn JSON.stringify({\n  ok: true,\n  cedula: cedula,\n  reboot: reboot,\n  message: 'La consulta corre en este turno. No inventes equipos ni digas que reiniciaste. El mensaje al cliente lo escribe el flujo.'\n});"
       },
-      "id": "b8e4d2c3-5f69-4c1b-8d22-onuporcedula1",
+      "id": "c1d2e3f4-a5b6-4789-8abc-onu-tool00001",
       "name": "ONU por Cédula",
-      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
-      "typeVersion": 2.2,
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
       "position": [
         1840,
         960
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const agent = $input.first().json || {};\nlet pedir = false;\ntry { pedir = $('Enviar Fotos Planes').isExecuted; } catch (e) { pedir = false; }\nreturn [{ json: Object.assign({}, agent, { enviar_fotos: pedir }) }];"
+      },
+      "id": "d1e2f3a4-b5c6-4789-8def-marcarfotos01",
+      "name": "Marcar fotos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        1880
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e2f3a4b5-c6d7-4789-8ef0-pidiofotos001",
+              "leftValue": "={{ $json.enviar_fotos }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e2f3a4b5-c6d7-4789-8ef0-pidiofotos001",
+      "name": "¿Pidió fotos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1488,
+        1880
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://drive.google.com/uc?export=download&id=1gC1bRs9RxVmD1qd8_jjDuDKHjYfRXIEE",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "foto1",
+              "neverError": true
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "f3a4b5c6-d7e8-4789-8f01-foto1drive001",
+      "name": "Descargar Foto 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1728,
+        1760
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://drive.google.com/uc?export=download&id=19gRogWbND-CS5kez3Rs5IIqnSezkHbzs",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "foto2",
+              "neverError": true
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "a4b5c6d7-e8f9-4789-8012-foto2drive001",
+      "name": "Descargar Foto 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1728,
+        2000
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "b5c6d7e8-f9a0-4789-8123-combinarfot01",
+      "name": "Combinar Fotos",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1968,
+        1880
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Merge Session').first().json.chatwoot_base_url + '/api/v1/accounts/' + $('Merge Session').first().json.account_id + '/conversations/' + $('Merge Session').first().json.conversation_id + '/messages' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "Estos son nuestros planes 📸"
+            },
+            {
+              "name": "message_type",
+              "value": "outgoing"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "attachments[]",
+              "inputDataFieldName": "foto1"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "attachments[]",
+              "inputDataFieldName": "foto2"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "c6d7e8f9-a0b1-4789-8234-fotosenviar01",
+      "name": "Enviar Fotos a Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2208,
+        1880
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const agent = $('Marcar fotos').first().json || {};\nconst sent = $input.first().json || {};\nlet reply = String(agent.output || '').trim();\nconst ok = !!sent.id || sent.message_type === 'outgoing';\nif (!ok) {\n  const aviso = 'No pude enviar las fotos de los planes en este momento.';\n  reply = reply ? (reply + '\\n\\n' + aviso) : aviso;\n}\nif (!reply) reply = 'Estos son nuestros planes.';\nreturn [{ json: { output: reply, intermediateSteps: agent.intermediateSteps || [] } }];"
+      },
+      "id": "d7e8f9a0-b1c2-4789-8345-textofotos001",
+      "name": "Texto tras fotos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        1880
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function parseTool(raw) {\n  if (raw === undefined || raw === null || raw === '') return null;\n  if (typeof raw === 'string') {\n    try { return JSON.parse(raw); } catch (e) { return null; }\n  }\n  if (typeof raw === 'object') {\n    if (typeof raw.response === 'string') {\n      try { return JSON.parse(raw.response); } catch (e) { return raw; }\n    }\n    if (raw.ok !== undefined || raw.cedula !== undefined || raw.reboot !== undefined) return raw;\n  }\n  return null;\n}\n\nconst agent = $input.first().json || {};\nlet ran = false;\ntry { ran = $('ONU por Cédula').isExecuted; } catch (e) { ran = false; }\n\nlet decision = null;\ntry { decision = parseTool($('ONU por Cédula').first().json); } catch (e) {}\n\nconst steps = Array.isArray(agent.intermediateSteps) ? agent.intermediateSteps : [];\nif (!decision) {\n  for (const step of steps) {\n    const tool = String((step && step.action && step.action.tool) || '');\n    const norm = tool.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n    if (norm.indexOf('onu') !== -1 && norm.indexOf('cedula') !== -1) {\n      ran = true;\n      decision = parseTool(step.observation) || parseTool(step.action && step.action.toolInput);\n    }\n  }\n}\n\nlet sesion = '';\ntry { sesion = String($('Merge Session').first().json.session.cedula || '').trim(); } catch (e) {}\nconst cedula = String((decision && decision.cedula) || sesion || '').trim();\nconst reboot = !!(decision && (decision.reboot === true || String(decision.reboot).toLowerCase() === 'true'));\n\nif (!ran) {\n  return [{ json: Object.assign({}, agent, { consultar_onu: false }) }];\n}\nif (!cedula || (decision && decision.ok === false)) {\n  return [{ json: {\n    output: (decision && decision.message) || 'Necesito tu cédula para buscar el equipo.',\n    consultar_onu: false,\n    intermediateSteps: steps\n  } }];\n}\nreturn [{ json: {\n  consultar_onu: true,\n  cedula: cedula,\n  reboot: reboot,\n  output: agent.output || '',\n  intermediateSteps: steps\n} }];"
+      },
+      "id": "e8f9a0b1-c2d3-4789-8456-marcaronu0001",
+      "name": "Marcar ONU",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f9a0b1c2-d3e4-4789-8567-consultoonu001",
+              "leftValue": "={{ $json.consultar_onu }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f9a0b1c2-d3e4-4789-8567-consultoonu001",
+      "name": "¿Consultó ONU?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1488,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://buho-net.smartolt.com/api/onu/get_all_onus_details",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "page_size",
+              "value": "1000"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "a0b1c2d3-e4f5-4789-8678-obteneronus01",
+      "name": "Obtener ONUs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1728,
+        240
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = $('Marcar ONU').first().json || {};\nconst cedulaRaw = String(t.cedula || '').trim();\nconst cedula = cedulaRaw.toLowerCase();\nconst reboot = t.reboot === true || t.reboot === 'true';\nconst items = $input.all().map(i => i.json || {});\nlet onus = [];\nfor (const resp of items) {\n  if (Array.isArray(resp.onus)) onus = onus.concat(resp.onus);\n  else if (Array.isArray(resp)) onus = onus.concat(resp);\n  else if (resp && resp.unique_external_id) onus.push(resp);\n}\n\nconst failed = items.length > 0 && onus.length === 0 && items.every(r => r && r.error);\nif (!cedula || failed) {\n  return [{ json: {\n    cedula: cedulaRaw,\n    reboot_requested: reboot,\n    count: 0,\n    matches: [],\n    do_reboot: false,\n    reboot_onu_id: '',\n    consulta_error: failed ? 'No pude consultar el equipo en este momento.' : ''\n  } }];\n}\n\nconst matches = onus\n  .filter(o =>\n    String(o.name || '').toLowerCase().includes(cedula) ||\n    String(o.contact || '').toLowerCase().includes(cedula)\n  )\n  .map(o => ({\n    name: o.name || '',\n    unique_external_id: o.unique_external_id || '',\n    sn: o.sn || '',\n    olt_name: o.olt_name || '',\n    status: o.status || o.onu_status || ''\n  }));\n\nconst single = reboot && matches.length === 1;\nreturn [{ json: {\n  cedula: cedulaRaw,\n  reboot_requested: reboot,\n  count: matches.length,\n  matches: matches,\n  do_reboot: single,\n  reboot_onu_id: single ? matches[0].unique_external_id : '',\n  consulta_error: ''\n} }];"
+      },
+      "id": "b1c2d3e4-f5a6-4789-8789-filtrarcedula",
+      "name": "Filtrar por Cédula",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c2d3e4f5-a6b7-4789-8890-reiniciarif001",
+              "leftValue": "={{ $json.do_reboot }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c2d3e4f5-a6b7-4789-8890-reiniciarif001",
+      "name": "¿Reiniciar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2208,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://buho-net.smartolt.com/api/onu/reboot/' + $json.reboot_onu_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "d3e4f5a6-b7c8-4789-8901-reinicionuhttp",
+      "name": "Reiniciar ONU",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2448,
+        80
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hOKwxJDjN8mGNvfv",
+          "name": "token Smarth Olt"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const f = $('Filtrar por Cédula').first().json;\nconst r = $input.first().json || {};\nconst statusFalse = r.status === false || r.status === 'false' || !!r.error;\nconst ok = !statusFalse && (r.status === true || r.status === 'true' || !!r.response || !!r.message);\nconst onu = (f.matches && f.matches[0]) || {};\nconst detalle = (r.error && (r.error.message || r.error.description)) || '';\nconst message = ok\n  ? 'Se envió el comando de reinicio a la ONU de ' + (onu.name || '') + ' (ID externo ' + (onu.unique_external_id || '') + ', SN ' + (onu.sn || '') + '). El equipo tardará 1-2 minutos en reconectar.'\n  : 'No se pudo reiniciar el equipo.' + (detalle ? ' ' + String(detalle).slice(0, 160) : '');\nlet steps = [];\ntry { steps = $('Marcar ONU').first().json.intermediateSteps || []; } catch (e) {}\nreturn [{ json: { output: message, result: ok ? 'reiniciada' : 'error', onu: onu, intermediateSteps: steps } }];"
+      },
+      "id": "e4f5a6b7-c8d9-4789-9012-respreinicio1",
+      "name": "Respuesta Reinicio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const f = $json;\nlet message;\nif (f.consulta_error) {\n  message = f.consulta_error;\n} else if (f.count === 0) {\n  message = 'No se encontraron ONUs asociadas a la cédula ' + f.cedula + '.';\n} else if (f.reboot_requested && f.count > 1) {\n  const list = f.matches.map((o, i) => (i + 1) + '. ' + o.name + ' — ID externo ' + o.unique_external_id + ' — SN ' + o.sn).join('\\n');\n  message = 'Encontré ' + f.count + ' equipos para la cédula ' + f.cedula + '. No reinicio cuando hay más de uno. ¿Cuál es el tuyo?\\n' + list;\n} else {\n  const list = f.matches.map((o, i) => (i + 1) + '. ' + o.name + ' — ID externo ' + o.unique_external_id + ' — SN ' + o.sn + ' — OLT ' + o.olt_name + ' — estado ' + o.status).join('\\n');\n  message = 'Encontré ' + f.count + ' equipo(s) para la cédula ' + f.cedula + ':\\n' + list;\n}\nlet steps = [];\ntry { steps = $('Marcar ONU').first().json.intermediateSteps || []; } catch (e) {}\nreturn [{ json: { output: message, count: f.count, matches: f.matches, intermediateSteps: steps } }];"
+      },
+      "id": "f5a6b7c8-d9e0-4789-9123-respbusqueda1",
+      "name": "Respuesta Búsqueda",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        400
       ]
     }
   ],
@@ -1997,7 +2304,7 @@
       "main": [
         [
           {
-            "node": "Prepare Reply",
+            "node": "Marcar ONU",
             "type": "main",
             "index": 0
           }
@@ -2019,7 +2326,7 @@
       "main": [
         [
           {
-            "node": "Prepare Reply",
+            "node": "Marcar fotos",
             "type": "main",
             "index": 0
           }
@@ -2533,6 +2840,197 @@
           {
             "node": "Agente Soporte",
             "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar fotos": {
+      "main": [
+        [
+          {
+            "node": "¿Pidió fotos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Pidió fotos?": {
+      "main": [
+        [
+          {
+            "node": "Descargar Foto 1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Descargar Foto 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar Foto 1": {
+      "main": [
+        [
+          {
+            "node": "Combinar Fotos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar Foto 2": {
+      "main": [
+        [
+          {
+            "node": "Combinar Fotos",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combinar Fotos": {
+      "main": [
+        [
+          {
+            "node": "Enviar Fotos a Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Fotos a Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Texto tras fotos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto tras fotos": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar ONU": {
+      "main": [
+        [
+          {
+            "node": "¿Consultó ONU?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Consultó ONU?": {
+      "main": [
+        [
+          {
+            "node": "Obtener ONUs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener ONUs": {
+      "main": [
+        [
+          {
+            "node": "Filtrar por Cédula",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar por Cédula": {
+      "main": [
+        [
+          {
+            "node": "¿Reiniciar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Reiniciar?": {
+      "main": [
+        [
+          {
+            "node": "Reiniciar ONU",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta Búsqueda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reiniciar ONU": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Reinicio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta Reinicio": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta Búsqueda": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reply",
+            "type": "main",
             "index": 0
           }
         ]
