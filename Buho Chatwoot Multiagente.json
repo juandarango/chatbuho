@@ -405,7 +405,7 @@
         "promptType": "define",
         "text": "={{ $json.text }}",
         "options": {
-          "systemMessage": "Eres el agente de Soporte de Búho Net (ISP). Eres el punto de entrada de TODO chat. Hablas español, claro y breve.\n\nIdentidad:\n- Si no hay cédula ni referencia en el contexto de sesión, pídelas (cédula colombiana o código tipo BH00000).\n- Llama sima_cliente y luego save_identity con los datos encontrados.\n- No inventes IDs, SN, saldos ni estados. Si una tool falla o viene vacía, dilo.\n\nInventario SmartOLT (piloto): puedes listar OLTs, ONUs, LOS, offline, PON, tarjetas, temperatura, buscar por SN y ver estado de ONU. Resume en texto; NUNCA pegues JSON crudo.\n\nLímites:\n- Recibos, saldo, factura: NO los resuelvas. Llama transfer_facturacion y dile al cliente que el siguiente mensaje lo atiende Facturación.\n- Plan nuevo, mudanza, ventas: llama transfer_ventas igual.\n- Pedir un asesor humano: llama handoff_humano.\n- ONU del cliente (tool ONU por Referencia): usa la referencia de la sesión (la que dio SIMA). Si no está, no llames la tool: primero hay que identificar el servicio. En query manda JSON {\"referencia\":\"\",\"reboot\":false}. reboot true solo con un sí claro.\n- Al llamar la tool no describas equipos ni digas que reiniciaste: ese texto lo escribe el flujo. Ninguna ONU, una (y el reinicio si hubo un sí y hay una sola) o varias (las lista y no reinicia). No llames reboot_onu.\n- Si el contexto trae daño masivo, infórmalo ANTES de diagnosticar o sugerir reboot.\n\nConfirmaciones: no ejecutes acciones destructivas sin un \"sí\" claro del cliente.\nMáximo 2-3 preguntas por turno.\n\nMenú (si el mensaje trae \"Motivo elegido en menú\"):\n- falla_tecnica: ya le pedimos el documento y la descripción de la falla. Si falta la cédula, pídela. Consulta SIMA y SmartOLT y resume en texto. Si no lo resuelves, llama handoff_humano.\n- cambio_wifi: pide la cédula y el nombre o la contraseña nuevos. El nombre de la red no lleva espacios (usa - o _). La contraseña debe tener más de 15 caracteres, letras y números. No hay API para cambiar el WiFi: cuando tengas los datos llama siempre handoff_humano. Nunca digas que ya cambiaste la red.\n- pqr: si la sesión ya tiene cédula (por documento o por referencia en SIMA), llama la tool PQRS sin pedir documento. No redactes el listado ni digas que abriste o registraste la PQR: ese texto lo escribe el flujo. Si no hay cédula, completa la identificación antes. Para una PQR nueva, toma la descripción del caso y llama handoff_humano.\n\nSi la sesión ya trae referencia y cédula, el cliente está identificado. No vuelvas a pedir el documento ni la referencia. Úsalos en SIMA y en las demás tools.",
+          "systemMessage": "Eres el agente de Soporte de Búho Net (ISP). Eres el punto de entrada de TODO chat. Hablas español, claro y breve.\n\nIdentidad:\n- Si no hay cédula ni referencia en el contexto de sesión, pídelas (cédula colombiana o código tipo BH00000).\n- Llama sima_cliente y luego save_identity con los datos encontrados.\n- No inventes IDs, SN, saldos ni estados. Si una tool falla o viene vacía, dilo.\n\nInventario SmartOLT (piloto): puedes listar OLTs, ONUs, LOS, offline, PON, tarjetas, temperatura, buscar por SN y ver estado de ONU. Resume en texto; NUNCA pegues JSON crudo.\n\nLímites:\n- Recibos, saldo, factura: NO los resuelvas. Llama transfer_facturacion y dile al cliente que el siguiente mensaje lo atiende Facturación.\n- Plan nuevo, mudanza, ventas: llama transfer_ventas igual.\n- Pedir un asesor humano: llama handoff_humano.\n- ONU del cliente (tool ONU por Referencia): usa la referencia de la sesión (la que dio SIMA). Si no está, no llames la tool: primero hay que identificar el servicio. En query manda JSON {\"referencia\":\"\",\"reboot\":false}. reboot true solo con un sí claro.\n- Al llamar la tool no describas equipos ni digas que reiniciaste: ese texto lo escribe el flujo. Ninguna ONU, una (y el reinicio si hubo un sí y hay una sola) o varias (las lista y no reinicia). No llames reboot_onu.\n- Si el contexto trae daño masivo, infórmalo ANTES de diagnosticar o sugerir reboot.\n\nConfirmaciones: no ejecutes acciones destructivas sin un \"sí\" claro del cliente.\nMáximo 2-3 preguntas por turno.\n\nMenú (si el mensaje trae \"Motivo elegido en menú\"):\n- falla_tecnica: ya le pedimos el documento y la descripción de la falla. Si falta la cédula, pídela. Consulta SIMA y SmartOLT y resume en texto. Si no lo resuelves, llama handoff_humano.\n- cambio_wifi: pide la cédula y el nombre o la contraseña nuevos. El nombre de la red no lleva espacios (usa - o _). La contraseña debe tener más de 15 caracteres, letras y números. No hay API para cambiar el WiFi: cuando tengas los datos llama siempre handoff_humano. Nunca digas que ya cambiaste la red.\n- pqr: si la sesión no tiene cédula, pide solo el número (dígitos, sin puntos ni comas). Si ya está, llama la tool PQRS. No redactes el listado ni digas que registraste la PQR: el flujo escribe el resultado, el enlace para registrarla y los botones.\n\nSi la sesión ya trae referencia y cédula, el cliente está identificado. No vuelvas a pedir el documento ni la referencia. Úsalos en SIMA y en las demás tools.",
           "maxIterations": 8,
           "returnIntermediateSteps": true
         }
@@ -631,8 +631,8 @@
     },
     {
       "parameters": {
-        "description": "Consulta las PQRS del titular. No pidas cédula: el flujo usa la de la sesión. No redactes el listado ni digas que registraste una PQR.",
-        "jsCode": "function sessionFrom() {\n  try {\n    if ($('Interpretar identidad').isExecuted) {\n      const j = $('Interpretar identidad').first().json || {};\n      if (j.session) return j.session;\n    }\n  } catch (e) {}\n  try {\n    if ($('Router Menú').isExecuted) {\n      const j = $('Router Menú').first().json || {};\n      if (j.session) return j.session;\n    }\n  } catch (e) {}\n  try {\n    const j = $('Merge Session').first().json || {};\n    return j.session || {};\n  } catch (e) {\n    return {};\n  }\n}\n\nfunction cedulaDeSesion(sess) {\n  let c = String(sess.cedula || sess.numero_documento || '').replace(/\\D/g, '');\n  if (c) return c;\n  const ref = String(sess.referencia || '').trim().toUpperCase();\n  const list = Array.isArray(sess.referencias) ? sess.referencias : [];\n  if (ref && list.length) {\n    for (const r of list) {\n      if (String(r.referencia || '').trim().toUpperCase() === ref) {\n        return String(r.cedula || '').replace(/\\D/g, '');\n      }\n    }\n  }\n  return '';\n}\n\nconst sess = sessionFrom();\nconst cedula = cedulaDeSesion(sess);\nif (!cedula) {\n  return JSON.stringify({\n    ok: false,\n    cedula: '',\n    message: 'Falta la cédula del titular. Identifica al cliente en SIMA (cédula o referencia BH) antes de consultar PQRS. No inventes radicados.'\n  });\n}\nreturn JSON.stringify({\n  ok: true,\n  cedula: cedula,\n  message: 'La consulta corre en este turno. No inventes radicados ni digas que registraste una PQR. El mensaje al cliente lo escribe el flujo.'\n});\n"
+        "description": "Consulta las PQRS ya registradas del titular. No crea una PQR. Si no hay cédula en sesión, pide solo los dígitos. No redactes el listado: el flujo escribe el resultado y los botones.",
+        "jsCode": "function sessionFrom() {\n  try {\n    if ($('Interpretar identidad').isExecuted) {\n      const j = $('Interpretar identidad').first().json || {};\n      if (j.session) return j.session;\n    }\n  } catch (e) {}\n  try {\n    if ($('Router Menú').isExecuted) {\n      const j = $('Router Menú').first().json || {};\n      if (j.session) return j.session;\n    }\n  } catch (e) {}\n  try {\n    const j = $('Merge Session').first().json || {};\n    return j.session || {};\n  } catch (e) {\n    return {};\n  }\n}\n\nfunction cedulaDeSesion(sess) {\n  let c = String(sess.cedula || sess.numero_documento || '').replace(/\\D/g, '');\n  if (c) return c;\n  const ref = String(sess.referencia || '').trim().toUpperCase();\n  const list = Array.isArray(sess.referencias) ? sess.referencias : [];\n  if (ref && list.length) {\n    for (const r of list) {\n      if (String(r.referencia || '').trim().toUpperCase() === ref) {\n        return String(r.cedula || '').replace(/\\D/g, '');\n      }\n    }\n  }\n  return '';\n}\n\nconst sess = sessionFrom();\nconst cedula = cedulaDeSesion(sess);\nif (!cedula) {\n  return JSON.stringify({\n    ok: false,\n    cedula: '',\n    message: 'Falta la cédula. Pide solo el número, dígitos, sin puntos ni comas. No inventes radicados ni digas que ya consultaste.'\n  });\n}\nreturn JSON.stringify({\n  ok: true,\n  cedula: cedula,\n  message: 'La consulta corre en este turno. No redactes el listado ni digas que registraste una PQR. El mensaje, el enlace y los botones los escribe el flujo.'\n});\n"
       },
       "id": "e1eea302-a346-430e-8a4f-b5ba4520129a",
       "name": "PQRS",
@@ -1426,7 +1426,7 @@
     },
     {
       "parameters": {
-        "jsCode": "let prev = $('Router Menú').first().json;\ntry { if ($('Interpretar identidad').isExecuted) prev = $('Interpretar identidad').first().json; } catch (e) {}\ntry { if ($('Armar factura').isExecuted) prev = $('Armar factura').first().json; } catch (e) {}\nconst out = $input.first().json;\nlet reply = String(out.output !== undefined ? out.output : (out.text || '')).trim();\ntry {\n  if ($('Respuesta Reinicio').isExecuted) {\n    const onuMsg = $('Respuesta Reinicio').first().json || {};\n    if (onuMsg.output) reply = String(onuMsg.output).trim();\n  } else if ($('Respuesta Búsqueda').isExecuted) {\n    const onuMsg = $('Respuesta Búsqueda').first().json || {};\n    if (onuMsg.output) reply = String(onuMsg.output).trim();\n  } else if ($('Respuesta PQRS').isExecuted) {\n    const pqMsg = $('Respuesta PQRS').first().json || {};\n    if (pqMsg.output_pqrs) reply = String(pqMsg.output_pqrs).trim();\n  }\n} catch (e) {}\nif (!reply) reply = 'No pude generar una respuesta. Intenta de nuevo en un momento.';\nif (reply.length > 4000) reply = reply.slice(0, 3900) + '\\n…';\n\nconst session = Object.assign({}, prev.session || {});\n\nfunction ran(name) {\n  try { return $(name).isExecuted; } catch (e) { return false; }\n}\n\nfunction collectToolNames(obj, acc, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 8) return;\n  if (Array.isArray(obj)) {\n    obj.forEach((x) => collectToolNames(x, acc, depth + 1));\n    return;\n  }\n  for (const [k, v] of Object.entries(obj)) {\n    if ((k === 'tool' || k === 'toolName' || k === 'name') && typeof v === 'string') acc.push(v);\n    if (k === 'action' && v && typeof v === 'object' && typeof v.tool === 'string') acc.push(v.tool);\n    if (v && typeof v === 'object') collectToolNames(v, acc, depth + 1);\n  }\n}\n\nif (ran('Transfer Ventas')) session.active_agent = 'ventas';\nelse if (ran('Transfer Facturación')) session.active_agent = 'facturacion';\nelse if (ran('Transfer Soporte desde Facturación') || ran('Transfer Soporte desde Ventas')) session.active_agent = 'soporte';\nelse {\n  const names = [];\n  collectToolNames(out.intermediateSteps || out.intermediate_steps || [], names, 0);\n  const blob = names.join(' | ').toLowerCase();\n  if (/\\btransfer ventas\\b/.test(blob)) session.active_agent = 'ventas';\n  else if (/transfer factur/.test(blob)) session.active_agent = 'facturacion';\n  else if (/transfer soporte/.test(blob)) session.active_agent = 'soporte';\n}\n\nlet handoff_team = '';\nif (ran('Handoff Ventas Humano')) handoff_team = 'ventas';\nelse if (ran('Handoff Contabilidad')) handoff_team = 'contabilidad';\nelse if (ran('Handoff Humano Soporte')) handoff_team = 'soporte';\nelse {\n  const names = [];\n  collectToolNames(out.intermediateSteps || out.intermediate_steps || [], names, 0);\n  const blob = names.join(' | ').toLowerCase();\n  if (/handoff ventas/.test(blob) || /\\bhandoff:[\"']?ventas/.test(blob)) handoff_team = 'ventas';\n  else if (/handoff contabilidad/.test(blob)) handoff_team = 'contabilidad';\n  else if (/handoff humano soporte/.test(blob)) handoff_team = 'soporte';\n}\n\nlet cfg = {};\ntry { cfg = $('Config').first().json || {}; } catch (e) {}\nlet norm = {};\ntry { norm = $('Normalize').first().json || {}; } catch (e) {}\n\nconst teamMap = {\n  ventas: Number(cfg.team_id_ventas || prev.team_id_ventas || 0),\n  contabilidad: Number(cfg.team_id_contabilidad || prev.team_id_contabilidad || 0),\n  soporte: Number(cfg.team_id_soporte || prev.team_id_soporte || 0)\n};\nconst handoff_team_id = handoff_team ? (teamMap[handoff_team] || 0) : 0;\n\nconst menu_items = Array.isArray(prev.menu_items) ? prev.menu_items : [];\nconst use_buttons = menu_items.length > 0 && cfg.menu_botones !== false && cfg.menu_botones !== 0 && String(cfg.menu_botones) !== 'false';\n\nreturn [{\n  json: {\n    reply,\n    account_id: prev.account_id || norm.account_id,\n    conversation_id: prev.conversation_id || norm.conversation_id,\n    contact_id: prev.contact_id || norm.contact_id,\n    chatwoot_base_url: prev.chatwoot_base_url || cfg.chatwoot_base_url,\n    redis_session_key: prev.redis_session_key || norm.redis_session_key,\n    session_json: JSON.stringify(session),\n    session,\n    handoff_team,\n    handoff_team_id,\n    menu_items,\n    use_buttons\n  }\n}];\n"
+        "jsCode": "let prev = $('Router Menú').first().json;\ntry { if ($('Interpretar identidad').isExecuted) prev = $('Interpretar identidad').first().json; } catch (e) {}\ntry { if ($('Armar factura').isExecuted) prev = $('Armar factura').first().json; } catch (e) {}\nconst out = $input.first().json;\nlet reply = String(out.output !== undefined ? out.output : (out.text || '')).trim();\ntry {\n  if ($('Respuesta Reinicio').isExecuted) {\n    const onuMsg = $('Respuesta Reinicio').first().json || {};\n    if (onuMsg.output) reply = String(onuMsg.output).trim();\n  } else if ($('Respuesta Búsqueda').isExecuted) {\n    const onuMsg = $('Respuesta Búsqueda').first().json || {};\n    if (onuMsg.output) reply = String(onuMsg.output).trim();\n  } else if ($('Respuesta PQRS').isExecuted) {\n    const pqMsg = $('Respuesta PQRS').first().json || {};\n    if (pqMsg.output_pqrs) reply = String(pqMsg.output_pqrs).trim();\n  }\n} catch (e) {}\nif (!reply) reply = 'No pude generar una respuesta. Intenta de nuevo en un momento.';\nif (reply.length > 4000) reply = reply.slice(0, 3900) + '\\n…';\n\nconst session = Object.assign({}, prev.session || {});\n\nfunction ran(name) {\n  try { return $(name).isExecuted; } catch (e) { return false; }\n}\n\nfunction collectToolNames(obj, acc, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 8) return;\n  if (Array.isArray(obj)) {\n    obj.forEach((x) => collectToolNames(x, acc, depth + 1));\n    return;\n  }\n  for (const [k, v] of Object.entries(obj)) {\n    if ((k === 'tool' || k === 'toolName' || k === 'name') && typeof v === 'string') acc.push(v);\n    if (k === 'action' && v && typeof v === 'object' && typeof v.tool === 'string') acc.push(v.tool);\n    if (v && typeof v === 'object') collectToolNames(v, acc, depth + 1);\n  }\n}\n\nif (ran('Transfer Ventas')) session.active_agent = 'ventas';\nelse if (ran('Transfer Facturación')) session.active_agent = 'facturacion';\nelse if (ran('Transfer Soporte desde Facturación') || ran('Transfer Soporte desde Ventas')) session.active_agent = 'soporte';\nelse {\n  const names = [];\n  collectToolNames(out.intermediateSteps || out.intermediate_steps || [], names, 0);\n  const blob = names.join(' | ').toLowerCase();\n  if (/\\btransfer ventas\\b/.test(blob)) session.active_agent = 'ventas';\n  else if (/transfer factur/.test(blob)) session.active_agent = 'facturacion';\n  else if (/transfer soporte/.test(blob)) session.active_agent = 'soporte';\n}\n\nlet handoff_team = '';\nif (prev.cerrar_chat === true || out.cerrar_chat === true) handoff_team = '';\nelse if (ran('Handoff Ventas Humano')) handoff_team = 'ventas';\nelse if (ran('Handoff Contabilidad')) handoff_team = 'contabilidad';\nelse if (ran('Handoff Humano Soporte')) handoff_team = 'soporte';\nelse {\n  const names = [];\n  collectToolNames(out.intermediateSteps || out.intermediate_steps || [], names, 0);\n  const blob = names.join(' | ').toLowerCase();\n  if (/handoff ventas/.test(blob) || /\\bhandoff:[\"']?ventas/.test(blob)) handoff_team = 'ventas';\n  else if (/handoff contabilidad/.test(blob)) handoff_team = 'contabilidad';\n  else if (/handoff humano soporte/.test(blob)) handoff_team = 'soporte';\n}\nif (!handoff_team && prev.cerrar_chat !== true && out.cerrar_chat !== true) {\n  const hinted = String(prev.handoff_team || out.handoff_team || '').toLowerCase();\n  if (hinted === 'soporte' || hinted === 'ventas' || hinted === 'contabilidad') handoff_team = hinted;\n}\n\nlet cfg = {};\ntry { cfg = $('Config').first().json || {}; } catch (e) {}\nlet norm = {};\ntry { norm = $('Normalize').first().json || {}; } catch (e) {}\n\nconst teamMap = {\n  ventas: Number(cfg.team_id_ventas || prev.team_id_ventas || 0),\n  contabilidad: Number(cfg.team_id_contabilidad || prev.team_id_contabilidad || 0),\n  soporte: Number(cfg.team_id_soporte || prev.team_id_soporte || 0)\n};\nconst handoff_team_id = handoff_team ? (teamMap[handoff_team] || 0) : 0;\n\nlet menu_items = Array.isArray(prev.menu_items) ? prev.menu_items : [];\ntry {\n  if ($('Respuesta PQRS').isExecuted) {\n    const pq = $('Respuesta PQRS').first().json || {};\n    if (Array.isArray(pq.menu_items) && pq.menu_items.length) menu_items = pq.menu_items;\n    if (pq.session && typeof pq.session === 'object') Object.assign(session, pq.session);\n  }\n} catch (e) {}\nconst cerrar_chat = prev.cerrar_chat === true || out.cerrar_chat === true;\nconst use_buttons = menu_items.length > 0 && cfg.menu_botones !== false && cfg.menu_botones !== 0 && String(cfg.menu_botones) !== 'false';\n\nreturn [{\n  json: {\n    reply,\n    account_id: prev.account_id || norm.account_id,\n    conversation_id: prev.conversation_id || norm.conversation_id,\n    contact_id: prev.contact_id || norm.contact_id,\n    chatwoot_base_url: prev.chatwoot_base_url || cfg.chatwoot_base_url,\n    redis_session_key: prev.redis_session_key || norm.redis_session_key,\n    session_json: JSON.stringify(session),\n    session,\n    handoff_team,\n    handoff_team_id,\n    menu_items,\n    use_buttons,\n    cerrar_chat\n  }\n}];\n"
       },
       "id": "5f4287b2-3064-4ee8-9fd1-73a3c4f066c1",
       "name": "Prepare Reply",
@@ -1540,7 +1540,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const prev = $input.first().json;\nconst session = Object.assign({}, prev.session || {});\nconst userRaw = String(prev.user_text || '').trim();\n\nfunction norm(s) {\n  return String(s || '')\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nconst user = norm(userRaw);\n\nfunction numbered(intro, items) {\n  const lines = items.map((it, i) => (i + 1) + '. ' + it.title);\n  return intro.replace(/\\s+$/, '') + '\\n\\n' + lines.join('\\n');\n}\n\nfunction promptFor(sess) {\n  return [\n    'Mensaje del cliente:',\n    prev.user_text || '',\n    '',\n    'Sesión:',\n    JSON.stringify(sess),\n    sess.motivo ? ('Motivo elegido en menú: ' + sess.motivo) : 'Sin motivo de menú.',\n    sess.referencia ? ('Referencia elegida: ' + sess.referencia) : '',\n    prev.outage ? ('DAÑO MASIVO activo: ' + prev.outage) : 'Sin flag de daño masivo en Redis.'\n  ].filter(function (line) { return line !== ''; }).join('\\n');\n}\n\nfunction clearIdentity() {\n  session.tipo_documento = '';\n  session.tipo_documento_nombre = '';\n  session.numero_documento = '';\n  session.area_destino = '';\n  session.referencias = [];\n  session.referencia = '';\n  session.nombre_cliente = '';\n  session.cedula = '';\n  session.referencia_consulta = '';\n  session.motivo = '';\n  session.ultima_eleccion = '';\n}\n\nfunction elegido(label, text) {\n  return 'Elegiste: ' + label + '\\n\\n' + text;\n}\n\nfunction menuResult(state, motivo, agent, reply, items) {\n  session.menu_state = state;\n  if (motivo !== null && motivo !== undefined) session.motivo = motivo;\n  if (agent) session.active_agent = agent;\n  return [{\n    json: Object.assign({}, prev, {\n      session: session,\n      active_agent: session.active_agent,\n      route: 'menu',\n      output: reply,\n      menu_items: items || [],\n      text: promptFor(session)\n    })\n  }];\n}\n\nfunction agentResult(agent, motivo) {\n  session.menu_state = 'done';\n  if (motivo !== null && motivo !== undefined) session.motivo = motivo;\n  if (agent) session.active_agent = agent;\n  const copy = Object.assign({}, prev, {\n    session: session,\n    active_agent: session.active_agent,\n    route: 'agente',\n    menu_items: [],\n    text: promptFor(session)\n  });\n  delete copy.output;\n  return [{ json: copy }];\n}\n\nfunction buscarResult() {\n  session.menu_state = 'buscando';\n  session.ultima_eleccion = session.referencia_consulta || session.numero_documento || '';\n  const copy = Object.assign({}, prev, {\n    session: session,\n    active_agent: session.active_agent,\n    route: 'buscar_cliente',\n    menu_items: [],\n    text: promptFor(session)\n  });\n  delete copy.output;\n  return [{ json: copy }];\n}\n\nconst itemsMain = [\n  { title: 'Soporte', value: 'Soporte' },\n  { title: 'Consultar cuenta', value: 'Consultar cuenta' },\n  { title: 'Ventas', value: 'Ventas' }\n];\nconst itemsReintento = [\n  { title: 'Intentar de nuevo', value: 'Intentar de nuevo' },\n  { title: 'Ir a ventas', value: 'Ir a ventas' }\n];\nconst itemsSoporte = [\n  { title: 'Soporte Técnico Internet y TV', value: 'Soporte Técnico Internet y TV' },\n  { title: 'Cambiar Nombre, Contraseña de Red WiFi', value: 'Cambiar Nombre, Contraseña de Red WiFi' },\n  { title: 'PQRs', value: 'PQRs' }\n];\n\nconst welcome = numbered(\n  'Bienvenido a Buho Network SAS 🦉\\n\\nSomos tu proveedor de internet en Chía y Cajicá.\\n¿Cómo te podemos ayudar el día de hoy?\\n\\nPor favor selecciona el área con la que deseas comunicarte:',\n  itemsMain\n);\nconst datoAsk = 'Escribe tu cédula de ciudadanía, solo dígitos y sin puntos ni comas, o tu referencia (ejemplo BH00000).';\nconst soporteMenu = numbered(\n  'Escoge una opción.\\nSelecciona el tipo de servicio requerido:',\n  itemsSoporte\n);\nconst ventasAsk = 'Nos alegra que nos contactes 😀\\n¿Cuál es tu nombre?';\nconst fallaText = 'Describe la falla que esté presentando tu servicio.\\nSi es posible adjunta alguna evidencia visual del problema.\\nEn un momento uno de nuestros asesores te atenderá 🦉';\nconst wifiText = 'Escribe la nueva contraseña o el nombre para tu red wifi.\\n\\nRecuerda: una contraseña fuerte tiene más de 15 caracteres, combinados entre letras y números.\\nEvita espacios en el nombre de la red: reemplázalos por - o _.\\n\\nEn un momento uno de nuestros asesores te confirmará el cambio 🦉';\nconst pqrText = 'Escribe tu petición, queja o reclamo.\\nSi tienes ayudas visuales que nos ayuden a entender el problema, adjúntalas por favor.\\nEn un momento uno de nuestros asesores te atenderá 🦉';\nconst pagosText = numbered(\n  'Puedes consultar tu saldo y realizar tu pago en buhonet.sima-app.com/pagos/portal\\nAl pagar por la página web no es necesario enviar comprobante.\\nTambién puedes pagar en efectivo y con tarjeta en nuestras oficinas en Chía y Cajicá.\\n\\n¿Tienes alguna duda relacionada con tu factura?',\n  [{ title: 'Sí', value: 'Sí' }, { title: 'No, gracias', value: 'No, gracias' }]\n);\nconst pagosSi = 'Cuéntanos tu duda sobre la factura y envíanos el número de documento del titular.';\nconst thanks = 'Gracias por comunicarte con Buho Network SAS 😀';\n\nfunction matchMain(n) {\n  if (n === '1' || n === 'soporte') return 'soporte';\n  if (n === '2' || n === 'consultar cuenta' || n.indexOf('consultar') !== -1) return 'cuenta';\n  if (n === '3' || n === 'ventas' || n.indexOf('no soy') !== -1) return 'nuevo';\n  return '';\n}\n\nfunction matchSoporte(n) {\n  if (n === '1' || n.indexOf('1 ') === 0) return 'falla_tecnica';\n  if (n === '2' || n.indexOf('2 ') === 0) return 'cambio_wifi';\n  if (n === '3' || n.indexOf('3 ') === 0) return 'pqr';\n  if (n.indexOf('wifi') !== -1 || n.indexOf('wi fi') !== -1 || n.indexOf('contrasena') !== -1 || n.indexOf('clave') !== -1) return 'cambio_wifi';\n  if (n.indexOf('pqr') !== -1 || n.indexOf('queja') !== -1 || n.indexOf('reclamo') !== -1 || n.indexOf('peticion') !== -1) return 'pqr';\n  if (n.indexOf('soporte tecnico') !== -1 || n.indexOf('internet') !== -1 || n.indexOf(' tv') !== -1 || n === 'tv' || n === 'soporte') return 'falla_tecnica';\n  return '';\n}\n\nfunction isNo(n) {\n  return n === 'no' || n === '2' || n === 'no gracias' || n.indexOf('no ') === 0;\n}\nfunction isSi(n) {\n  return n === 'si' || n === 's' || n === '1' || n.indexOf('si ') === 0;\n}\n\nfunction pedirDato(area) {\n  session.area_destino = area === 'facturacion' ? 'facturacion' : 'soporte';\n  session.numero_documento = '';\n  session.tipo_documento = '';\n  session.tipo_documento_nombre = '';\n  session.referencia_consulta = '';\n  session.referencias = [];\n  session.referencia = '';\n  const agent = session.area_destino === 'facturacion' ? 'facturacion' : 'soporte';\n  const etiqueta = session.area_destino === 'facturacion' ? 'Consultar cuenta' : 'Soporte';\n  return menuResult('doc_dato', '', agent, elegido(etiqueta, datoAsk), []);\n}\n\nfunction clasificarDato(raw) {\n  const original = String(raw || '').trim();\n  const sinPuntuacion = original.replace(/[\\s.,]/g, '');\n  if (!sinPuntuacion) return { error: 'formato' };\n  if (/^\\d+$/.test(sinPuntuacion)) {\n    if (sinPuntuacion.length < 5 || sinPuntuacion.length > 15) return { error: 'cedula_len' };\n    return { kind: 'cedula', numero: sinPuntuacion };\n  }\n  if (/[.,\\s]/.test(original)) return { error: 'formato' };\n  if (/^BH\\d+$/i.test(original)) {\n    if (original.length < 3 || original.length > 20) return { error: 'formato' };\n    return { kind: 'referencia', referencia: original.toUpperCase() };\n  }\n  return { error: 'formato' };\n}\n\nfunction ventasLead(etiqueta) {\n  clearIdentity();\n  return menuResult('done', 'lead', 'ventas', elegido(etiqueta || 'Ventas', ventasAsk), []);\n}\n\nfunction welcomeMenu() {\n  clearIdentity();\n  return menuResult('main', '', 'soporte', welcome, itemsMain);\n}\n\nfunction deudaResult() {\n  session.menu_state = 'buscando';\n  session.motivo = 'factura';\n  session.active_agent = 'facturacion';\n  const copy = Object.assign({}, prev, {\n    session: session,\n    active_agent: session.active_agent,\n    route: 'buscar_deuda',\n    menu_items: [],\n    text: promptFor(session)\n  });\n  delete copy.output;\n  return [{ json: copy }];\n}\n\nfunction afterRef(ref) {\n  session.referencia = ref.referencia || '';\n  session.cedula = session.numero_documento || ref.cedula || session.cedula || '';\n  session.nombre_cliente = ref.nombre || '';\n  session.referencias = [];\n  const quien = session.nombre_cliente ? ('Encontré a ' + session.nombre_cliente) : 'Encontré tu servicio';\n  const donde = [ref.direccion, ref.municipio].filter(Boolean).join(', ');\n  const linea = quien + ', referencia ' + session.referencia + (donde ? ' (' + donde + ')' : '') + '.';\n  if (session.area_destino === 'facturacion') {\n    session.ultima_eleccion = session.referencia || 'la referencia';\n    return deudaResult();\n  }\n  return menuResult('soporte_sub', '', 'soporte', elegido(session.referencia, linea + '\\n\\n' + soporteMenu), itemsSoporte);\n}\n\nif (user === 'menu' || user === 'inicio') {\n  return welcomeMenu();\n}\n\nconst state = String(session.menu_state || '');\n\nif (!state) {\n  return welcomeMenu();\n}\n\nif (state === 'main') {\n  const picked = matchMain(user);\n  if (picked === 'soporte') return pedirDato('soporte');\n  if (picked === 'cuenta') return pedirDato('facturacion');\n  if (picked === 'nuevo') return ventasLead();\n  return welcomeMenu();\n}\n\nif (state === 'doc_tipo' || state === 'doc_numero' || state === 'doc_confirma') {\n  return pedirDato(session.area_destino || 'soporte');\n}\n\nif (state === 'doc_dato') {\n  const dato = clasificarDato(userRaw);\n  if (!dato || dato.error) {\n    const msg = dato && dato.error === 'cedula_len'\n      ? 'La cédula debe tener entre 5 y 15 dígitos, sin puntos ni comas.'\n      : datoAsk;\n    return menuResult('doc_dato', session.motivo || '', session.active_agent, msg, []);\n  }\n  if (dato.kind === 'cedula') {\n    session.tipo_documento = '13';\n    session.tipo_documento_nombre = 'Cédula de ciudadanía';\n    session.numero_documento = dato.numero;\n    session.cedula = dato.numero;\n    session.referencia_consulta = '';\n  } else {\n    session.tipo_documento = '';\n    session.tipo_documento_nombre = '';\n    session.numero_documento = '';\n    session.referencia_consulta = dato.referencia;\n  }\n  return buscarResult();\n}\n\nif (state === 'no_encontrado') {\n  if (user === '1' || user.indexOf('intent') !== -1 || user.indexOf('de nuevo') !== -1 || user.indexOf('otra vez') !== -1) {\n    return pedirDato(session.area_destino || 'soporte');\n  }\n  if (user === '2' || user.indexOf('venta') !== -1) return ventasLead('Ir a ventas');\n  return menuResult('no_encontrado', '', session.active_agent, numbered('No se encontraron los datos.\\n\\n¿Quieres intentar de nuevo o ir a ventas?', itemsReintento), itemsReintento);\n}\n\nif (state === 'elegir_ref') {\n  const refs = Array.isArray(session.referencias) ? session.referencias : [];\n  let picked = null;\n  const asNum = parseInt(user, 10);\n  if (String(asNum) === user && asNum >= 1 && asNum <= refs.length) picked = refs[asNum - 1];\n  if (!picked) {\n    picked = refs.filter(function (r) { return norm(r.referencia) === user; })[0] || null;\n  }\n  if (!picked) {\n    const again = refs.map(function (r, i) {\n      const donde = [r.direccion, r.municipio].filter(Boolean).join(', ');\n      return (i + 1) + '. ' + r.referencia + (donde ? ' — ' + donde : '');\n    }).join('\\n');\n    return menuResult('elegir_ref', session.motivo || '', session.active_agent, 'Elige el número de la referencia:\\n\\n' + again, refs.map(function (r) {\n      return { title: r.referencia, value: r.referencia };\n    }));\n  }\n  return afterRef(picked);\n}\n\nif (state === 'soporte_sub') {\n  const picked = matchSoporte(user);\n  if (picked === 'falla_tecnica') return menuResult('done', 'falla_tecnica', 'soporte', elegido('Soporte Técnico Internet y TV', fallaText), []);\n  if (picked === 'cambio_wifi') return menuResult('done', 'cambio_wifi', 'soporte', elegido('Cambiar Nombre, Contraseña de Red WiFi', wifiText), []);\n  if (picked === 'pqr') return menuResult('done', 'pqr', 'soporte', elegido('PQRs', pqrText), []);\n  return agentResult('soporte');\n}\n\nif (state === 'pagos_sub') {\n  if (isNo(user)) return menuResult('', '', 'soporte', thanks, []);\n  if (isSi(user)) return menuResult('done', 'factura', 'facturacion', pagosSi, []);\n  return agentResult('facturacion', 'factura');\n}\n\nreturn agentResult();\n"
+        "jsCode": "const prev = $input.first().json;\nconst session = Object.assign({}, prev.session || {});\nconst userRaw = String(prev.user_text || '').trim();\n\nfunction norm(s) {\n  return String(s || '')\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nconst user = norm(userRaw);\n\nfunction numbered(intro, items) {\n  const lines = items.map((it, i) => (i + 1) + '. ' + it.title);\n  return intro.replace(/\\s+$/, '') + '\\n\\n' + lines.join('\\n');\n}\n\nfunction promptFor(sess) {\n  return [\n    'Mensaje del cliente:',\n    prev.user_text || '',\n    '',\n    'Sesión:',\n    JSON.stringify(sess),\n    sess.motivo ? ('Motivo elegido en menú: ' + sess.motivo) : 'Sin motivo de menú.',\n    sess.referencia ? ('Referencia elegida: ' + sess.referencia) : '',\n    prev.outage ? ('DAÑO MASIVO activo: ' + prev.outage) : 'Sin flag de daño masivo en Redis.'\n  ].filter(function (line) { return line !== ''; }).join('\\n');\n}\n\nfunction clearIdentity() {\n  session.tipo_documento = '';\n  session.tipo_documento_nombre = '';\n  session.numero_documento = '';\n  session.area_destino = '';\n  session.referencias = [];\n  session.referencia = '';\n  session.nombre_cliente = '';\n  session.cedula = '';\n  session.referencia_consulta = '';\n  session.motivo = '';\n  session.ultima_eleccion = '';\n}\n\nfunction elegido(label, text) {\n  return 'Elegiste: ' + label + '\\n\\n' + text;\n}\n\nfunction menuResult(state, motivo, agent, reply, items) {\n  session.menu_state = state;\n  if (motivo !== null && motivo !== undefined) session.motivo = motivo;\n  if (agent) session.active_agent = agent;\n  return [{\n    json: Object.assign({}, prev, {\n      session: session,\n      active_agent: session.active_agent,\n      route: 'menu',\n      output: reply,\n      menu_items: items || [],\n      text: promptFor(session)\n    })\n  }];\n}\n\nfunction agentResult(agent, motivo) {\n  session.menu_state = 'done';\n  if (motivo !== null && motivo !== undefined) session.motivo = motivo;\n  if (agent) session.active_agent = agent;\n  const copy = Object.assign({}, prev, {\n    session: session,\n    active_agent: session.active_agent,\n    route: 'agente',\n    menu_items: [],\n    text: promptFor(session)\n  });\n  delete copy.output;\n  return [{ json: copy }];\n}\n\nfunction buscarResult() {\n  session.menu_state = 'buscando';\n  session.ultima_eleccion = session.referencia_consulta || session.numero_documento || '';\n  const copy = Object.assign({}, prev, {\n    session: session,\n    active_agent: session.active_agent,\n    route: 'buscar_cliente',\n    menu_items: [],\n    text: promptFor(session)\n  });\n  delete copy.output;\n  return [{ json: copy }];\n}\n\nconst itemsMain = [\n  { title: 'Soporte', value: 'Soporte' },\n  { title: 'Consultar cuenta', value: 'Consultar cuenta' },\n  { title: 'Ventas', value: 'Ventas' }\n];\nconst itemsReintento = [\n  { title: 'Intentar de nuevo', value: 'Intentar de nuevo' },\n  { title: 'Ir a ventas', value: 'Ir a ventas' }\n];\nconst itemsSoporte = [\n  { title: 'Soporte Técnico Internet y TV', value: 'Soporte Técnico Internet y TV' },\n  { title: 'Cambiar Nombre, Contraseña de Red WiFi', value: 'Cambiar Nombre, Contraseña de Red WiFi' },\n  { title: 'PQRs', value: 'PQRs' }\n];\n\nconst welcome = numbered(\n  'Bienvenido a Buho Network SAS 🦉\\n\\nSomos tu proveedor de internet en Chía y Cajicá.\\n¿Cómo te podemos ayudar el día de hoy?\\n\\nPor favor selecciona el área con la que deseas comunicarte:',\n  itemsMain\n);\nconst datoAsk = 'Escribe tu cédula de ciudadanía, solo dígitos y sin puntos ni comas, o tu referencia (ejemplo BH00000).';\nconst soporteMenu = numbered(\n  'Escoge una opción.\\nSelecciona el tipo de servicio requerido:',\n  itemsSoporte\n);\nconst ventasAsk = 'Nos alegra que nos contactes 😀\\n¿Cuál es tu nombre?';\nconst fallaText = 'Describe la falla que esté presentando tu servicio.\\nSi es posible adjunta alguna evidencia visual del problema.\\nEn un momento uno de nuestros asesores te atenderá 🦉';\nconst wifiText = 'Escribe la nueva contraseña o el nombre para tu red wifi.\\n\\nRecuerda: una contraseña fuerte tiene más de 15 caracteres, combinados entre letras y números.\\nEvita espacios en el nombre de la red: reemplázalos por - o _.\\n\\nEn un momento uno de nuestros asesores te confirmará el cambio 🦉';\nconst pqrText = 'Escribe tu petición, queja o reclamo.\\nSi tienes ayudas visuales que nos ayuden a entender el problema, adjúntalas por favor.\\nEn un momento uno de nuestros asesores te atenderá 🦉';\nconst pagosText = numbered(\n  'Puedes consultar tu saldo y realizar tu pago en buhonet.sima-app.com/pagos/portal\\nAl pagar por la página web no es necesario enviar comprobante.\\nTambién puedes pagar en efectivo y con tarjeta en nuestras oficinas en Chía y Cajicá.\\n\\n¿Tienes alguna duda relacionada con tu factura?',\n  [{ title: 'Sí', value: 'Sí' }, { title: 'No, gracias', value: 'No, gracias' }]\n);\nconst pagosSi = 'Cuéntanos tu duda sobre la factura y envíanos el número de documento del titular.';\nconst thanks = 'Gracias por comunicarte con Buho Network SAS 😀';\n\nfunction matchMain(n) {\n  if (n === '1' || n === 'soporte') return 'soporte';\n  if (n === '2' || n === 'consultar cuenta' || n.indexOf('consultar') !== -1) return 'cuenta';\n  if (n === '3' || n === 'ventas' || n.indexOf('no soy') !== -1) return 'nuevo';\n  return '';\n}\n\nfunction matchSoporte(n) {\n  if (n === '1' || n.indexOf('1 ') === 0) return 'falla_tecnica';\n  if (n === '2' || n.indexOf('2 ') === 0) return 'cambio_wifi';\n  if (n === '3' || n.indexOf('3 ') === 0) return 'pqr';\n  if (n.indexOf('wifi') !== -1 || n.indexOf('wi fi') !== -1 || n.indexOf('contrasena') !== -1 || n.indexOf('clave') !== -1) return 'cambio_wifi';\n  if (n.indexOf('pqr') !== -1 || n.indexOf('queja') !== -1 || n.indexOf('reclamo') !== -1 || n.indexOf('peticion') !== -1) return 'pqr';\n  if (n.indexOf('soporte tecnico') !== -1 || n.indexOf('internet') !== -1 || n.indexOf(' tv') !== -1 || n === 'tv' || n === 'soporte') return 'falla_tecnica';\n  return '';\n}\n\nfunction isNo(n) {\n  return n === 'no' || n === '2' || n === 'no gracias' || n.indexOf('no ') === 0;\n}\nfunction isSi(n) {\n  return n === 'si' || n === 's' || n === '1' || n.indexOf('si ') === 0;\n}\n\nfunction pedirDato(area) {\n  session.area_destino = area === 'facturacion' ? 'facturacion' : 'soporte';\n  session.numero_documento = '';\n  session.tipo_documento = '';\n  session.tipo_documento_nombre = '';\n  session.referencia_consulta = '';\n  session.referencias = [];\n  session.referencia = '';\n  const agent = session.area_destino === 'facturacion' ? 'facturacion' : 'soporte';\n  const etiqueta = session.area_destino === 'facturacion' ? 'Consultar cuenta' : 'Soporte';\n  return menuResult('doc_dato', '', agent, elegido(etiqueta, datoAsk), []);\n}\n\nfunction clasificarDato(raw) {\n  const original = String(raw || '').trim();\n  const sinPuntuacion = original.replace(/[\\s.,]/g, '');\n  if (!sinPuntuacion) return { error: 'formato' };\n  if (/^\\d+$/.test(sinPuntuacion)) {\n    if (sinPuntuacion.length < 5 || sinPuntuacion.length > 15) return { error: 'cedula_len' };\n    return { kind: 'cedula', numero: sinPuntuacion };\n  }\n  if (/[.,\\s]/.test(original)) return { error: 'formato' };\n  if (/^BH\\d+$/i.test(original)) {\n    if (original.length < 3 || original.length > 20) return { error: 'formato' };\n    return { kind: 'referencia', referencia: original.toUpperCase() };\n  }\n  return { error: 'formato' };\n}\n\nfunction ventasLead(etiqueta) {\n  clearIdentity();\n  return menuResult('done', 'lead', 'ventas', elegido(etiqueta || 'Ventas', ventasAsk), []);\n}\n\nfunction welcomeMenu() {\n  clearIdentity();\n  return menuResult('main', '', 'soporte', welcome, itemsMain);\n}\n\nfunction deudaResult() {\n  session.menu_state = 'buscando';\n  session.motivo = 'factura';\n  session.active_agent = 'facturacion';\n  const copy = Object.assign({}, prev, {\n    session: session,\n    active_agent: session.active_agent,\n    route: 'buscar_deuda',\n    menu_items: [],\n    text: promptFor(session)\n  });\n  delete copy.output;\n  return [{ json: copy }];\n}\n\n\nfunction consultarPqrs(ced) {\n  session.motivo = 'pqr';\n  session.cedula = ced;\n  if (!session.numero_documento) session.numero_documento = ced;\n  session.active_agent = 'soporte';\n  const copy = Object.assign({}, prev, {\n    session: session,\n    active_agent: 'soporte',\n    route: 'consultar_pqrs',\n    menu_items: [],\n    cedula: ced\n  });\n  delete copy.output;\n  return [{ json: copy }];\n}\n\nfunction empezarPqrs() {\n  const ced = String(session.cedula || session.numero_documento || '').replace(/\\D/g, '');\n  if (!ced) {\n    return menuResult('pqrs_cedula', 'pqr', 'soporte', 'Escribe tu cédula de ciudadanía, solo dígitos y sin puntos ni comas.', []);\n  }\n  return consultarPqrs(ced);\n}\n\nfunction afterRef(ref) {\n  session.referencia = ref.referencia || '';\n  session.cedula = session.numero_documento || ref.cedula || session.cedula || '';\n  session.nombre_cliente = ref.nombre || '';\n  session.referencias = [];\n  const quien = session.nombre_cliente ? ('Encontré a ' + session.nombre_cliente) : 'Encontré tu servicio';\n  const donde = [ref.direccion, ref.municipio].filter(Boolean).join(', ');\n  const linea = quien + ', referencia ' + session.referencia + (donde ? ' (' + donde + ')' : '') + '.';\n  if (session.area_destino === 'facturacion') {\n    session.ultima_eleccion = session.referencia || 'la referencia';\n    return deudaResult();\n  }\n  return menuResult('soporte_sub', '', 'soporte', elegido(session.referencia, linea + '\\n\\n' + soporteMenu), itemsSoporte);\n}\n\nif (user === 'menu' || user === 'inicio') {\n  return welcomeMenu();\n}\n\nconst state = String(session.menu_state || '');\n\nif (!state) {\n  return welcomeMenu();\n}\n\nif (state === 'main') {\n  const picked = matchMain(user);\n  if (picked === 'soporte') return pedirDato('soporte');\n  if (picked === 'cuenta') return pedirDato('facturacion');\n  if (picked === 'nuevo') return ventasLead();\n  return welcomeMenu();\n}\n\nif (state === 'doc_tipo' || state === 'doc_numero' || state === 'doc_confirma') {\n  return pedirDato(session.area_destino || 'soporte');\n}\n\nif (state === 'doc_dato') {\n  const dato = clasificarDato(userRaw);\n  if (!dato || dato.error) {\n    const msg = dato && dato.error === 'cedula_len'\n      ? 'La cédula debe tener entre 5 y 15 dígitos, sin puntos ni comas.'\n      : datoAsk;\n    return menuResult('doc_dato', session.motivo || '', session.active_agent, msg, []);\n  }\n  if (dato.kind === 'cedula') {\n    session.tipo_documento = '13';\n    session.tipo_documento_nombre = 'Cédula de ciudadanía';\n    session.numero_documento = dato.numero;\n    session.cedula = dato.numero;\n    session.referencia_consulta = '';\n  } else {\n    session.tipo_documento = '';\n    session.tipo_documento_nombre = '';\n    session.numero_documento = '';\n    session.referencia_consulta = dato.referencia;\n  }\n  return buscarResult();\n}\n\nif (state === 'no_encontrado') {\n  if (user === '1' || user.indexOf('intent') !== -1 || user.indexOf('de nuevo') !== -1 || user.indexOf('otra vez') !== -1) {\n    return pedirDato(session.area_destino || 'soporte');\n  }\n  if (user === '2' || user.indexOf('venta') !== -1) return ventasLead('Ir a ventas');\n  return menuResult('no_encontrado', '', session.active_agent, numbered('No se encontraron los datos.\\n\\n¿Quieres intentar de nuevo o ir a ventas?', itemsReintento), itemsReintento);\n}\n\nif (state === 'elegir_ref') {\n  const refs = Array.isArray(session.referencias) ? session.referencias : [];\n  let picked = null;\n  const asNum = parseInt(user, 10);\n  if (String(asNum) === user && asNum >= 1 && asNum <= refs.length) picked = refs[asNum - 1];\n  if (!picked) {\n    picked = refs.filter(function (r) { return norm(r.referencia) === user; })[0] || null;\n  }\n  if (!picked) {\n    const again = refs.map(function (r, i) {\n      const donde = [r.direccion, r.municipio].filter(Boolean).join(', ');\n      return (i + 1) + '. ' + r.referencia + (donde ? ' — ' + donde : '');\n    }).join('\\n');\n    return menuResult('elegir_ref', session.motivo || '', session.active_agent, 'Elige el número de la referencia:\\n\\n' + again, refs.map(function (r) {\n      return { title: r.referencia, value: r.referencia };\n    }));\n  }\n  return afterRef(picked);\n}\n\nif (state === 'soporte_sub') {\n  const picked = matchSoporte(user);\n  if (picked === 'falla_tecnica') return menuResult('done', 'falla_tecnica', 'soporte', elegido('Soporte Técnico Internet y TV', fallaText), []);\n  if (picked === 'cambio_wifi') return menuResult('done', 'cambio_wifi', 'soporte', elegido('Cambiar Nombre, Contraseña de Red WiFi', wifiText), []);\n  if (picked === 'pqr') return empezarPqrs();\n  return agentResult('soporte');\n}\n\nif (state === 'pagos_sub') {\n  if (isNo(user)) return menuResult('', '', 'soporte', thanks, []);\n  if (isSi(user)) return menuResult('done', 'factura', 'facturacion', pagosSi, []);\n  return agentResult('facturacion', 'factura');\n}\n\nif (state === 'pqrs_cedula') {\n  const sin = String(userRaw || '').replace(/[\\s.,]/g, '');\n  if (!/^\\d+$/.test(sin) || sin.length < 5 || sin.length > 15) {\n    const msg = /^\\d+$/.test(sin)\n      ? 'La cédula debe tener entre 5 y 15 dígitos, sin puntos ni comas.'\n      : 'Escribe tu cédula de ciudadanía, solo dígitos y sin puntos ni comas.';\n    return menuResult('pqrs_cedula', 'pqr', 'soporte', msg, []);\n  }\n  session.tipo_documento = '13';\n  session.tipo_documento_nombre = 'Cédula de ciudadanía';\n  return consultarPqrs(sin);\n}\n\nif (state === 'pqrs_siguiente') {\n  const itemsPqrsNext = [\n    { title: 'Continuar con un asesor', value: 'Continuar con un asesor' },\n    { title: 'Volver al menú', value: 'Volver al menú' },\n    { title: 'Cerrar conversación', value: 'Cerrar conversación' }\n  ];\n  if (user === '1' || user.indexOf('asesor') !== -1 || user.indexOf('continuar') !== -1) {\n    session.menu_state = 'done';\n    session.motivo = 'pqr';\n    session.active_agent = 'soporte';\n    return [{ json: Object.assign({}, prev, {\n      session: session,\n      active_agent: 'soporte',\n      route: 'menu',\n      output: 'Te paso con un asesor de soporte. El siguiente mensaje lo atiende una persona.',\n      menu_items: [],\n      handoff_team: 'soporte'\n    }) }];\n  }\n  if (user === '2' || user.indexOf('menu') !== -1 || user.indexOf('volver') !== -1 || user === 'inicio') {\n    return welcomeMenu();\n  }\n  if (user === '3' || user.indexOf('cerrar') !== -1 || user.indexOf('chao') !== -1 || user.indexOf('adios') !== -1) {\n    session.menu_state = '';\n    return [{ json: Object.assign({}, prev, {\n      session: session,\n      active_agent: session.active_agent || 'soporte',\n      route: 'menu',\n      output: 'Gracias por comunicarte con Buho Network SAS. Cerramos esta conversación. Si nos necesitas, escríbenos de nuevo.',\n      menu_items: [],\n      cerrar_chat: true\n    }) }];\n  }\n  return menuResult('pqrs_siguiente', 'pqr', 'soporte', numbered('Elige una opción:', itemsPqrsNext), itemsPqrsNext);\n}\n\nif (state === 'done' && String(session.motivo || '') === 'pqr') {\n  const ya = String(session.cedula || session.numero_documento || '').replace(/\\D/g, '');\n  const sin = String(userRaw || '').replace(/[\\s.,]/g, '');\n  if (!ya && /^\\d+$/.test(sin) && sin.length >= 5 && sin.length <= 15) {\n    session.tipo_documento = '13';\n    session.tipo_documento_nombre = 'Cédula de ciudadanía';\n    return consultarPqrs(sin);\n  }\n}\n\n\nreturn agentResult();\n"
       },
       "id": "f80f15bb-8bdc-4fd6-b796-67ae3605d34a",
       "name": "Router Menú",
@@ -1626,6 +1626,30 @@
               },
               "renameOutput": true,
               "outputKey": "deuda"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a7c1e9b2-4d55-4f10-9c88-pqrsroute0001",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "consultar_pqrs",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "pqrs"
             }
           ]
         },
@@ -2521,7 +2545,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ 'https://www.buho-net.com/api/pqrs/' + $json.cedula }}",
+        "url": "={{ 'https://buho-net.com/api/pqrs/' + ($json.cedula || $json.session.cedula || '') }}",
         "options": {
           "response": {
             "response": {
@@ -2544,7 +2568,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const prev = $('Marcar PQRS').first().json || {};\nconst raw = $input.first().json || {};\n\nfunction rowsFrom(payload) {\n  if (!payload || typeof payload !== 'object') return null;\n  if (Array.isArray(payload)) return payload;\n  if (Array.isArray(payload.data)) return payload.data;\n  if (payload.data && typeof payload.data === 'object' && Array.isArray(payload.data.data)) return payload.data.data;\n  if (payload.body && Array.isArray(payload.body)) return payload.body;\n  if (payload.body && typeof payload.body === 'object' && Array.isArray(payload.body.data)) return payload.body.data;\n  return null;\n}\n\nconst wrapped = raw && raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body) && (raw.statusCode || raw.headers);\nconst body = wrapped ? raw.body : raw;\nconst status = Number(raw.statusCode || (body && body.statusCode) || 0);\nconst rows = rowsFrom(body);\nlet text = '';\nif (raw.error || (status && status >= 400)) {\n  text = 'No pude consultar las PQRS en este momento.';\n} else if (!rows || !rows.length) {\n  text = 'No encontré PQRS registradas para tu cédula.';\n} else {\n  const lines = rows.slice(0, 5).map(function (r, i) {\n    const rad = r.radicado || r.numero_radicado || r.numero || r.id || '';\n    const est = r.estado || r.status || '';\n    const fecha = r.fecha || r.fecha_radicacion || r.created_at || r.fecha_creacion || '';\n    const tipo = r.tipo || r.tipo_pqr || r.asunto || '';\n    const resp = r.respuesta || r.respuesta_final || r.descripcion || '';\n    const head = [rad ? ('Radicado ' + rad) : '', tipo, est, fecha].filter(Boolean).join(' · ');\n    const extra = resp ? ('\\n' + String(resp).slice(0, 300)) : '';\n    return (i + 1) + '. ' + (head || 'PQRS') + extra;\n  });\n  text = 'Estas son tus PQRS:\\n\\n' + lines.join('\\n\\n');\n  if (rows.length > 5) text += '\\n\\nHay ' + (rows.length - 5) + ' más.';\n}\n\nreturn [{ json: Object.assign({}, prev, { output_pqrs: text }) }];\n"
+        "jsCode": "const raw = $input.first().json || {};\nlet session = {};\ntry { session = Object.assign({}, ($('Router Menú').first().json.session) || {}); } catch (e) { session = {}; }\nif (raw.session && typeof raw.session === 'object') session = Object.assign(session, raw.session);\n\nconst cedula = String(raw.cedula || session.cedula || session.numero_documento || '').replace(/\\D/g, '');\n\nfunction rowsFrom(payload) {\n  if (!payload || typeof payload !== 'object') return null;\n  if (Array.isArray(payload)) return payload;\n  if (Array.isArray(payload.data)) return payload.data;\n  if (payload.data && typeof payload.data === 'object' && Array.isArray(payload.data.data)) return payload.data.data;\n  if (payload.body && Array.isArray(payload.body)) return payload.body;\n  if (payload.body && typeof payload.body === 'object' && Array.isArray(payload.body.data)) return payload.body.data;\n  if (payload.pqrs && Array.isArray(payload.pqrs)) return payload.pqrs;\n  return null;\n}\n\nconst wrapped = raw && raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body) && (raw.statusCode || raw.headers);\nconst body = wrapped ? raw.body : raw;\nconst status = Number(raw.statusCode || (body && body.statusCode) || 0);\nconst rows = rowsFrom(body);\nconst hard = !!raw.error || status >= 500;\nconst enlace = '\\n\\nSi quieres registrar una nueva, entra aquí: https://buho-net.com/regulaciones/pqrs';\nlet text = '';\nif (hard) {\n  text = 'No pude consultar las PQRS en este momento.';\n} else if (!rows || !rows.length) {\n  text = 'No encontré PQRS con la cédula ' + (cedula || 'indicada') + '.';\n} else {\n  const lines = rows.slice(0, 5).map(function (r, i) {\n    const rad = r.radicado || r.numero_radicado || r.numero || r.id || '';\n    const est = r.estado || r.status || r.estado_nombre || '';\n    const fecha = r.fecha || r.fecha_radicacion || r.created_at || r.fecha_creacion || '';\n    const tipo = r.tipo || r.tipo_pqr || r.tipo_solicitud || r.asunto || '';\n    const resp = r.respuesta || r.respuesta_final || r.descripcion || '';\n    const head = [rad ? ('Radicado ' + rad) : '', tipo, est, fecha].filter(Boolean).join(' · ');\n    const extra = resp ? ('\\n' + String(resp).slice(0, 300)) : '';\n    return (i + 1) + '. ' + (head || 'PQRS') + extra;\n  });\n  text = 'Estas son tus PQRS:\\n\\n' + lines.join('\\n\\n');\n  if (rows.length > 5) text += '\\n\\nHay ' + (rows.length - 5) + ' más.';\n}\ntext += enlace;\n\nsession.menu_state = 'pqrs_siguiente';\nsession.motivo = session.motivo || 'pqr';\nsession.active_agent = 'soporte';\nif (cedula) {\n  session.cedula = cedula;\n  if (!session.numero_documento) session.numero_documento = cedula;\n}\n\nconst items = [\n  { title: 'Continuar con un asesor', value: 'Continuar con un asesor' },\n  { title: 'Volver al menú', value: 'Volver al menú' },\n  { title: 'Cerrar conversación', value: 'Cerrar conversación' }\n];\n\nreturn [{ json: Object.assign({}, raw, {\n  output_pqrs: text,\n  output: text,\n  menu_items: items,\n  session: session,\n  cedula: cedula\n}) }];\n"
       },
       "id": "e4f5a6b7-c8d9-4789-d444-resppqrs00001",
       "name": "Respuesta PQRS",
@@ -2554,6 +2578,324 @@
         1968,
         720
       ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d5e6f7a8-b9c0-4789-e555-cerrarchat0001",
+              "leftValue": "={{ $('Prepare Reply').first().json.cerrar_chat }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d5e6f7a8-b9c0-4789-e555-cerrarchat0001",
+      "name": "¿Cerrar chat?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3328,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare Reply').first().json.chatwoot_base_url + '/api/v1/accounts/' + $('Prepare Reply').first().json.account_id + '/conversations/' + $('Prepare Reply').first().json.conversation_id + '/toggle_status' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'resolved' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "e6f7a8b9-c0d1-4789-f666-cerrarconv0001",
+      "name": "Cerrar conversación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3568,
+        960
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4789-a111-relojinact001",
+      "name": "Reloj inactividad",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2560,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [1, 2, 3, 4, 5].map(function (page) {\n  return { json: { page: page } };\n});\n"
+      },
+      "id": "b2c3d4e5-f6a7-4789-b222-paginaspend01",
+      "name": "Páginas pending",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2336,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://chatwoot.buho-net.com/api/v1/accounts/1/conversations?status=pending&assignee_type=all&page=' + $json.page }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "c3d4e5f6-a7b8-4789-c333-listarpend001",
+      "name": "HTTP Listar pending",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2112,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const MINUTOS_AVISO = 15;\nconst MINUTOS_CIERRE = 5;\nconst PREFIJO = '¿Sigues por aquí?';\nconst ahora = Math.floor(Date.now() / 1000);\nconst limiteAviso = ahora - MINUTOS_AVISO * 60;\nconst limiteCierre = ahora - MINUTOS_CIERRE * 60;\nconst vistos = {};\nconst salida = [];\n\nfunction payloadDe(json) {\n  if (!json || typeof json !== 'object') return [];\n  const body = json.body && typeof json.body === 'object' && !Array.isArray(json.body) ? json.body : json;\n  const data = body.data && typeof body.data === 'object' && !Array.isArray(body.data) ? body.data : body;\n  if (Array.isArray(data.payload)) return data.payload;\n  if (Array.isArray(body.payload)) return body.payload;\n  if (Array.isArray(body.data)) return body.data;\n  return [];\n}\n\nfunction epochDe(valor) {\n  if (valor === undefined || valor === null || valor === '') return 0;\n  if (typeof valor === 'number') {\n    if (!valor) return 0;\n    return valor > 1e12 ? Math.floor(valor / 1000) : Math.floor(valor);\n  }\n  const texto = String(valor).trim();\n  if (/^\\d+(\\.\\d+)?$/.test(texto)) {\n    const n = Number(texto);\n    if (!n) return 0;\n    return n > 1e12 ? Math.floor(n / 1000) : Math.floor(n);\n  }\n  const parsed = Date.parse(texto);\n  if (!parsed) return 0;\n  return Math.floor(parsed / 1000);\n}\n\nfunction esActividad(m) {\n  const tipo = m && m.message_type;\n  return tipo === 2 || tipo === '2' || tipo === 'activity';\n}\n\nfunction ultimoMensaje(conv) {\n  const lista = [];\n  if (conv.last_non_activity_message && typeof conv.last_non_activity_message === 'object') {\n    lista.push(conv.last_non_activity_message);\n  }\n  const msgs = Array.isArray(conv.messages) ? conv.messages : [];\n  for (let i = 0; i < msgs.length; i++) {\n    const m = msgs[i];\n    if (m && typeof m === 'object' && !esActividad(m)) lista.push(m);\n  }\n  let mejor = null;\n  let mejorTs = -1;\n  for (let i = 0; i < lista.length; i++) {\n    const ts = epochDe(lista[i].created_at || lista[i].timestamp);\n    if (ts >= mejorTs) {\n      mejor = lista[i];\n      mejorTs = ts;\n    }\n  }\n  return { mensaje: mejor, ts: mejorTs < 0 ? 0 : mejorTs };\n}\n\nfor (const item of $input.all()) {\n  const raw = item.json || {};\n  const statusCode = Number(raw.statusCode || 0);\n  if (statusCode >= 400) continue;\n  for (const conv of payloadDe(raw)) {\n    const st = String(conv.status || '').toLowerCase();\n    if (st !== 'pending') continue;\n    const id = String(conv.id || '');\n    if (!id || vistos[id]) continue;\n    let actividad = epochDe(conv.last_activity_at);\n    const ultimo = ultimoMensaje(conv);\n    const contenido = String((ultimo.mensaje && (ultimo.mensaje.content || ultimo.mensaje.processed_message_content)) || '').trim();\n    const esConfirmacion = contenido.indexOf(PREFIJO) === 0;\n    const tsMensaje = ultimo.ts || actividad;\n    let accion = '';\n    if (esConfirmacion) {\n      if (!tsMensaje || tsMensaje > limiteCierre) continue;\n      accion = 'cerrar';\n    } else {\n      if (!actividad || actividad > limiteAviso) continue;\n      accion = 'avisar';\n    }\n    vistos[id] = true;\n    salida.push({\n      json: {\n        accion: accion,\n        conversation_id: id,\n        account_id: '1',\n        chatwoot_base_url: 'https://chatwoot.buho-net.com'\n      }\n    });\n  }\n}\nreturn salida;\n"
+      },
+      "id": "d4e5f6a7-b8c9-4789-d444-filtrarinac01",
+      "name": "Filtrar inactivas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1888,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.chatwoot_base_url + '/api/v1/accounts/' + $json.account_id + '/conversations/' + $json.conversation_id + '/messages' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: \"¿Sigues por aquí? Si necesitas algo más, responde este mensaje.\", message_type: 'outgoing', private: false }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "e5f6a7b8-c9d0-4789-e555-avisoinact001",
+      "name": "Aviso inactividad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1440,
+        160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://chatwoot.buho-net.com/api/v1/accounts/1/conversations/' + ($json.conversation_id || $('Filtrar inactivas').item.json.conversation_id) + '/toggle_status' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'resolved' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "f6a7b8c9-d0e1-4789-f666-resolverina01",
+      "name": "Resolver inactividad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1216,
+        480
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a7b8c9d0-e1f2-4789-a777-condavisar01",
+              "leftValue": "={{ $json.accion }}",
+              "rightValue": "avisar",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a7b8c9d0-e1f2-4789-a777-avisarocerrar1",
+      "name": "¿Avisar o cerrar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1664,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.chatwoot_base_url + '/api/v1/accounts/' + $json.account_id + '/conversations/' + $json.conversation_id + '/messages' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: \"Cerramos este chat porque no recibimos respuesta. Cuando quieras, escríbenos y empezamos uno nuevo. Fue un gusto atenderte.\", message_type: 'outgoing', private: false }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "b8c9d0e1-f2a3-4789-b888-cierreinact001",
+      "name": "Cierre inactividad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1440,
+        480
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JhAQSwHXe9V5NqcC",
+          "name": "API Chatwoot"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "pinData": {},
@@ -3148,6 +3490,13 @@
         ],
         [
           {
+            "node": "HTTP Consultar PQRS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Switch Agente",
             "type": "main",
             "index": 0
@@ -3559,6 +3908,102 @@
         [
           {
             "node": "Marcar ONU",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar a Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "¿Cerrar chat?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Cerrar chat?": {
+      "main": [
+        [
+          {
+            "node": "Cerrar conversación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Reloj inactividad": {
+      "main": [
+        [
+          {
+            "node": "Páginas pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Páginas pending": {
+      "main": [
+        [
+          {
+            "node": "HTTP Listar pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Listar pending": {
+      "main": [
+        [
+          {
+            "node": "Filtrar inactivas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar inactivas": {
+      "main": [
+        [
+          {
+            "node": "¿Avisar o cerrar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Avisar o cerrar?": {
+      "main": [
+        [
+          {
+            "node": "Aviso inactividad",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cierre inactividad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cierre inactividad": {
+      "main": [
+        [
+          {
+            "node": "Resolver inactividad",
             "type": "main",
             "index": 0
           }
