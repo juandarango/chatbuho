@@ -1113,7 +1113,9 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ 'https://buhonet.sima-app.com/api/v1/clientes/' + encodeURIComponent($json.session.numero_documento) + '/deudas' }}",
+        "url": "={{ 'https://buhonet.sima-app.com/api/v1/clientes/' + encodeURIComponent($json.session.cedula || $json.session.numero_documento || '') + '/deudas' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "options": {
           "response": {
             "response": {
@@ -1132,6 +1134,12 @@
         40,
         1700
       ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0vTg2pDTdy0JK04X",
+          "name": "Token Sima"
+        }
+      },
       "onError": "continueRegularOutput"
     },
     {
